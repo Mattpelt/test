@@ -1,13 +1,15 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 from datetime import datetime
+import csv
+from pathlib import Path
 
 SAMPLE_DATA = [
-    {"title": "Freefall Over Alps", "type": "Video", "date": "2025-06-15", "altitude": "14,000 ft", "tags": "scenery, group"},
-    {"title": "Solo Jump #42", "type": "Video", "date": "2025-08-03", "altitude": "12,500 ft", "tags": "solo, sunset"},
-    {"title": "Team Formation", "type": "Photo", "date": "2025-09-20", "altitude": "13,000 ft", "tags": "formation, team"},
-    {"title": "Opening Shot", "type": "Photo", "date": "2025-10-01", "altitude": "10,000 ft", "tags": "canopy, landscape"},
-    {"title": "Night Jump", "type": "Video", "date": "2025-11-12", "altitude": "15,000 ft", "tags": "night, lights"},
+    {"title": "Freefall Over Alps", "type": "Video", "date": "2025-06-15", "altitude": "14,000 ft", "tags": "scenery, group", "rating": 5, "favorite": True},
+    {"title": "Solo Jump #42", "type": "Video", "date": "2025-08-03", "altitude": "12,500 ft", "tags": "solo, sunset", "rating": 4, "favorite": False},
+    {"title": "Team Formation", "type": "Photo", "date": "2025-09-20", "altitude": "13,000 ft", "tags": "formation, team", "rating": 5, "favorite": True},
+    {"title": "Opening Shot", "type": "Photo", "date": "2025-10-01", "altitude": "10,000 ft", "tags": "canopy, landscape", "rating": 3, "favorite": False},
+    {"title": "Night Jump", "type": "Video", "date": "2025-11-12", "altitude": "15,000 ft", "tags": "night, lights", "rating": 4, "favorite": False},
 ]
 
 
@@ -15,7 +17,7 @@ class SkyMediaHub(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("SkyDive Media Hub")
-        self.geometry("900x600")
+        self.geometry("1000x650")
         self.configure(bg="#0d1117")
         self.resizable(True, True)
 
@@ -28,6 +30,21 @@ class SkyMediaHub(tk.Tk):
         self.refresh_list()
 
     def _build_ui(self):
+        # Menu bar
+        menubar = tk.Menu(self, bg="#161b22", fg="#c9d1d9")
+        self.config(menu=menubar)
+        
+        file_menu = tk.Menu(menubar, bg="#161b22", fg="#c9d1d9", tearoff=0)
+        menubar.add_cascade(label="File", menu=file_menu)
+        file_menu.add_command(label="Export to CSV", command=self.export_csv)
+        file_menu.add_command(label="Import from CSV", command=self.import_csv)
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", command=self.quit)
+        
+        view_menu = tk.Menu(menubar, bg="#161b22", fg="#c9d1d9", tearoff=0)
+        menubar.add_cascade(label="View", menu=view_menu)
+        view_menu.add_command(label="Show Statistics", command=self.show_stats)
+
         # Header
         header = tk.Frame(self, bg="#161b22", pady=12)
         header.pack(fill="x")
@@ -81,12 +98,12 @@ class SkyMediaHub(tk.Tk):
                         font=("Helvetica", 10, "bold"), relief="flat")
         style.map("Treeview", background=[("selected", "#1f6feb")])
 
-        columns = ("title", "type", "date", "altitude", "tags")
+        columns = ("title", "type", "date", "altitude", "rating", "favorite", "tags")
         self.tree = ttk.Treeview(frame, columns=columns, show="headings", selectmode="browse")
 
         for col, heading, width in [
-            ("title", "Title", 220), ("type", "Type", 70), ("date", "Date", 100),
-            ("altitude", "Altitude", 100), ("tags", "Tags", 200)
+            ("title", "Title", 180), ("type", "Type", 70), ("date", "Date", 100),
+            ("altitude", "Altitude", 100), ("rating", "Rating", 60), ("favorite", "★", 40), ("tags", "Tags", 170)
         ]:
             self.tree.heading(col, text=heading)
             self.tree.column(col, width=width, anchor="w")
@@ -117,8 +134,11 @@ class SkyMediaHub(tk.Tk):
             if query and query not in item["title"].lower() and query not in item["tags"].lower():
                 continue
             tag = "video" if item["type"] == "Video" else "photo"
+            fav_icon = "★" if item.get("favorite", False) else "☆"
+            rating = item.get("rating", 0)
             self.tree.insert("", "end", values=(
-                item["title"], item["type"], item["date"], item["altitude"], item["tags"]
+                item["title"], item["type"], item["date"], item["altitude"],
+                f"{rating}/5", fav_icon, item["tags"]
             ), tags=(tag,))
             shown += 1
 
@@ -140,13 +160,102 @@ class SkyMediaHub(tk.Tk):
             self.media_items = [m for m in self.media_items if m["title"] != title]
             self.refresh_list()
 
+    def export_csv(self):
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".csv",
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
+            initialfile=f"skydive_media_{datetime.now().strftime('%Y%m%d')}.csv"
+        )
+        if not file_path:
+            return
+        try:
+            with open(file_path, 'w', newline='', encoding='utf-8') as csvfile:
+                fieldnames = ["title", "type", "date", "altitude", "rating", "favorite", "tags"]
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(self.media_items)
+            messagebox.showinfo("Success", f"Data exported to {Path(file_path).name}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Export failed: {e}")
+
+    def import_csv(self):
+        file_path = filedialog.askopenfilename(
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
+        )
+        if not file_path:
+            return
+        try:
+            with open(file_path, 'r', encoding='utf-8') as csvfile:
+                reader = csv.DictReader(csvfile)
+                imported = list(reader)
+                for item in imported:
+                    item["rating"] = int(item.get("rating", 0))
+                    item["favorite"] = item.get("favorite", "").lower() == "true"
+                self.media_items.extend(imported)
+            messagebox.showinfo("Success", f"Imported {len(imported)} items")
+            self.refresh_list()
+        except Exception as e:
+            messagebox.showerror("Error", f"Import failed: {e}")
+
+    def show_stats(self):
+        StatsWindow(self, self.media_items)
+
+
+class StatsWindow(tk.Toplevel):
+    def __init__(self, parent, media_items):
+        super().__init__(parent)
+        self.title("Statistics & Analytics")
+        self.geometry("450x400")
+        self.configure(bg="#161b22")
+        self.resizable(False, False)
+
+        # Calculate stats
+        total = len(media_items)
+        videos = sum(1 for m in media_items if m["type"] == "Video")
+        photos = total - videos
+        avg_rating = sum(m.get("rating", 0) for m in media_items) / total if total > 0 else 0
+        favorites = sum(1 for m in media_items if m.get("favorite", False))
+        
+        tags_list = []
+        for m in media_items:
+            tags_list.extend([t.strip() for t in m["tags"].split(",")])
+        popular_tags = sorted(set(tags_list), key=lambda x: tags_list.count(x), reverse=True)[:5]
+
+        # Display stats
+        stats_frame = tk.Frame(self, bg="#161b22")
+        stats_frame.pack(fill="both", expand=True, padx=20, pady=20)
+
+        tk.Label(stats_frame, text="📊 Collection Statistics", font=("Helvetica", 14, "bold"),
+                fg="#58a6ff", bg="#161b22").pack(anchor="w", pady=(0, 12))
+
+        stats = [
+            (f"Total Items", f"{total}"),
+            (f"Videos", f"{videos}"),
+            (f"Photos", f"{photos}"),
+            (f"Average Rating", f"{avg_rating:.1f} / 5"),
+            (f"Favorite Items", f"{favorites}"),
+        ]
+
+        for label, value in stats:
+            row = tk.Frame(stats_frame, bg="#161b22")
+            row.pack(fill="x", pady=6)
+            tk.Label(row, text=label, fg="#8b949e", bg="#161b22", width=20, anchor="w").pack(side="left")
+            tk.Label(row, text=value, fg="#79c0ff", bg="#161b22", font=("Helvetica", 11, "bold")).pack(side="left")
+
+        tk.Label(stats_frame, text="🏷️ Top Tags", font=("Helvetica", 12, "bold"),
+                fg="#56d364", bg="#161b22").pack(anchor="w", pady=(16, 8))
+        
+        for tag in popular_tags:
+            count = tags_list.count(tag)
+            tk.Label(stats_frame, text=f"  • {tag} ({count})", fg="#c9d1d9", bg="#161b22").pack(anchor="w")
+
 
 class AddDialog(tk.Toplevel):
     def __init__(self, parent: SkyMediaHub):
         super().__init__(parent)
         self.parent = parent
         self.title("Add Media")
-        self.geometry("380x300")
+        self.geometry("380x380")
         self.configure(bg="#161b22")
         self.resizable(False, False)
         self.grab_set()
@@ -156,6 +265,8 @@ class AddDialog(tk.Toplevel):
             ("Type", "type", ["Video", "Photo"]),
             ("Date (YYYY-MM-DD)", "date", None),
             ("Altitude", "altitude", None),
+            ("Rating (1-5)", "rating", [str(i) for i in range(1, 6)]),
+            ("Favorite", "favorite", ["No", "Yes"]),
             ("Tags (comma-separated)", "tags", None),
         ]
 
@@ -164,7 +275,12 @@ class AddDialog(tk.Toplevel):
             tk.Label(self, text=label, fg="#8b949e", bg="#161b22", anchor="w").grid(
                 row=i, column=0, padx=16, pady=6, sticky="w"
             )
-            var = tk.StringVar(value="Video" if key == "type" else "")
+            if key == "favorite":
+                var = tk.StringVar(value="No")
+            elif key == "rating":
+                var = tk.StringVar(value="5")
+            else:
+                var = tk.StringVar(value="Video" if key == "type" else "")
             self.vars[key] = var
             if options:
                 widget = ttk.Combobox(self, textvariable=var, values=options, state="readonly", width=22)
@@ -188,6 +304,8 @@ class AddDialog(tk.Toplevel):
             data["date"] = datetime.today().strftime("%Y-%m-%d")
         if not data["altitude"]:
             data["altitude"] = "—"
+        data["rating"] = int(data.get("rating", 5))
+        data["favorite"] = data.get("favorite") == "Yes"
         self.parent.media_items.append(data)
         self.parent.refresh_list()
         self.destroy()
