@@ -1,6 +1,7 @@
 import os
 import tempfile
 
+import pdfplumber
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
@@ -12,6 +13,53 @@ from app.schemas.rot import RotResponse
 from app.services.pdf_parser import parse_afifly_pdf
 
 router = APIRouter(prefix="/rots", tags=["Rotations"])
+
+
+@router.post("/debug-pdf")
+def debug_pdf(file: UploadFile = File(...)):
+    """
+    Retourne la structure brute pdfplumber du PDF (tables, colonnes, rects).
+    Endpoint de diagnostic uniquement — à supprimer en production.
+    """
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        tmp.write(file.file.read())
+        tmp_path = tmp.name
+
+    try:
+        with pdfplumber.open(tmp_path) as pdf:
+            page = pdf.pages[0]
+
+            tables_info = []
+            for i, t in enumerate(page.find_tables()):
+                rows = t.extract()
+                tables_info.append({
+                    "table_index": i,
+                    "bbox": t.bbox,
+                    "num_rows": len(rows),
+                    "first_3_rows": rows[:3],
+                })
+
+            rects_info = [
+                {"top": r["top"], "bottom": r["bottom"],
+                 "width": round(r["width"], 1), "height": round(r["height"], 1)}
+                for r in page.rects
+            ]
+
+            unique_linewidths = sorted(set(
+                round(e.get("linewidth", 0), 2)
+                for e in page.edges
+                if e.get("orientation") == "h"
+            ))
+
+            return {
+                "num_tables": len(tables_info),
+                "tables": tables_info,
+                "num_rects": len(rects_info),
+                "rects": rects_info,
+                "horizontal_edge_linewidths": unique_linewidths,
+            }
+    finally:
+        os.unlink(tmp_path)
 
 
 @router.post("/parse-preview")
