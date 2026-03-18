@@ -1,5 +1,6 @@
 import logging
 import re
+from collections import defaultdict
 from datetime import date, time
 
 import pdfplumber
@@ -13,6 +14,14 @@ RE_TIME   = re.compile(r'Heure\s*:\s*(\d{2}):(\d{2})')
 RE_WEIGHT = re.compile(r'\b(\d{2,3})\s*kg\b', re.IGNORECASE)
 RE_LEVEL  = re.compile(r'\(([A-Z]{1,3})\)\s*$')
 RE_UPPER  = re.compile(r'^[A-ZÀÂÆÇÉÈÊËÎÏÔŒÙÛÜŸ][A-ZÀÂÆÇÉÈÊËÎÏÔŒÙÛÜŸ\-]*$')
+
+# Limites des colonnes du tableau participants (points PDF, mesurées sur les edges)
+COL_HAUT_MAX  = 57    # Haut.      : x < 57
+COL_TYPE_MAX  = 165   # Type saut  : 57 ≤ x < 165
+COL_SAUT_MIN  = 207   # Sautant    : 207 ≤ x < 315
+COL_SAUT_MAX  = 315
+COL_COUL_MAX  = 395   # Couleur    : 315 ≤ x < 395
+COL_POIDS_MAX = 423   # Poids      : 395 ≤ x < 423
 
 
 # ---------------------------------------------------------------------------
@@ -74,93 +83,126 @@ def _parse_header(text: str) -> dict:
 
 def _parse_crew(page) -> dict:
     """
-    Cherche le tableau qui contient 'AVION' et 'PILOTE' dans son en-tête,
-    puis lit la ligne de données suivante.
+    Cherche le tableau contenant 'AVION' et 'PILOTE' dans son en-tête.
+    Utilise les noms de colonnes (pas les indices) pour être robuste.
     """
     for table in page.extract_tables():
         for i, row in enumerate(table):
             cells = [str(c or "").strip() for c in row]
             if any("AVION" in c for c in cells) and any("PILOTE" in c for c in cells):
+                avion_idx  = next((j for j, c in enumerate(cells) if c == "AVION"), None)
+                pilote_idx = next((j for j, c in enumerate(cells) if c == "PILOTE"), None)
+                chef_idx   = next((j for j, c in enumerate(cells) if "CHEF" in c), None)
+
                 if i + 1 < len(table):
                     data = [str(c or "").strip() for c in table[i + 1]]
-                    while len(data) < 4:
-                        data.append("")
                     return {
-                        "plane_registration": data[1] or None,
-                        "pilot":              data[2] or None,
-                        "chef_avion":         data[3] or None,
+                        "plane_registration": data[avion_idx]  if avion_idx  is not None and avion_idx  < len(data) else None,
+                        "pilot":              data[pilote_idx] if pilote_idx is not None and pilote_idx < len(data) else None,
+                        "chef_avion":         data[chef_idx]   if chef_idx   is not None and chef_idx   < len(data) else None,
                     }
+
     return {"plane_registration": None, "pilot": None, "chef_avion": None}
 
 
 # ---------------------------------------------------------------------------
-# Tableau des participants
+# Tableau des participants — extraction par positions de mots
 # ---------------------------------------------------------------------------
 
 def _parse_participants(page) -> list:
     """
-    Trouve le tableau des participants (celui avec l'en-tête 'Haut.'),
-    extrait chaque ligne et assigne les groupes via détection des bordures épaisses.
-    """
-    # Trouver le bon tableau
-    participant_table_obj = None
-    header_idx = 0
+    Extrait les participants via extract_words() + positions x/y.
 
-    for t_obj in page.find_tables():
-        rows = t_obj.extract()
-        for i, row in enumerate(rows[:3]):
-            cells = [str(c or "").strip() for c in row]
-            if any("Haut" in c for c in cells):
-                participant_table_obj = t_obj
-                header_idx = i
-                break
-        if participant_table_obj:
+    Stratégie :
+      1. Localiser l'en-tête "Haut." pour connaître le début du tableau.
+      2. Détecter les séparateurs de groupes (doubles-lignes horizontales).
+      3. Grouper les mots par ligne (tolérance 3pt sur y).
+      4. Pour chaque ligne avec une altitude en col[0], extraire les champs.
+    """
+    all_words = page.extract_words()
+
+    # --- 1. Trouver le début et la fin du tableau participants ---
+    header_top   = None
+    table_bottom = page.height - 30   # fallback
+
+    for w in all_words:
+        if "Haut" in w["text"] and w["x0"] < COL_HAUT_MAX + 5:
+            header_top = w["top"]
+        if header_top and w["text"] in ("Afifly", "TCPDF", "Powered") and w["top"] > header_top + 50:
+            table_bottom = w["top"] - 5
             break
 
-    if not participant_table_obj:
-        logger.warning("Tableau des participants introuvable.")
+    if header_top is None:
+        logger.warning("En-tête 'Haut.' introuvable dans le PDF.")
         return []
 
-    all_rows   = participant_table_obj.extract()
-    data_rows  = all_rows[header_idx + 1:]
-    groups     = _assign_groups(participant_table_obj, page, header_idx)
+    logger.debug(f"Tableau participants : top={header_top:.1f}, bottom={table_bottom:.1f}")
 
+    # --- 2. Détecter les séparateurs de groupes (doubles-lignes) ---
+    separator_bottoms = _find_group_separator_bottoms(page, header_top, table_bottom)
+    logger.debug(f"Séparateurs de groupes : {separator_bottoms}")
+
+    def get_group_id(row_top: float) -> int:
+        gid = 1
+        for sb in separator_bottoms:
+            if row_top > sb:
+                gid += 1
+        return gid
+
+    # --- 3. Grouper les mots en lignes ---
+    rows_dict: dict[int, list] = defaultdict(list)
+    for w in all_words:
+        if w["top"] <= header_top:
+            continue
+        if w["top"] >= table_bottom:
+            continue
+        row_key = round(w["top"] / 3) * 3   # tolérance 3pt
+        rows_dict[row_key].append(w)
+
+    # --- 4. Parser chaque ligne participant ---
     participants = []
 
-    for i, row in enumerate(data_rows):
-        cells = [str(c or "").strip() for c in row]
+    for row_key in sorted(rows_dict.keys()):
+        words = rows_dict[row_key]
 
-        if not any(cells):
+        # La colonne Haut. doit contenir un entier (altitude ex: 4000)
+        altitude_words = [w for w in words if w["text"].isdigit() and w["x0"] < COL_HAUT_MAX]
+        if not altitude_words:
             continue
 
-        # col[0]=Haut  col[1]=Type saut  col[2]=Sautant  col[3]=Couleur  col[4]=Poids ...
-        if len(cells) < 3:
-            continue
+        # Type de saut : COL_HAUT_MAX < x < COL_TYPE_MAX
+        type_words = sorted(
+            [w for w in words if COL_HAUT_MAX < w["x0"] < COL_TYPE_MAX],
+            key=lambda w: w["x0"],
+        )
+        jump_type = " ".join(w["text"] for w in type_words)
 
-        altitude_str = cells[0]
-        if not altitude_str.isdigit():
-            continue                            # ignore les lignes non-participant
-
-        jump_type = cells[1] if len(cells) > 1 else ""
-        name_raw  = cells[2] if len(cells) > 2 else ""
-
+        # Sautant : COL_SAUT_MIN ≤ x < COL_SAUT_MAX
+        name_words = sorted(
+            [w for w in words if COL_SAUT_MIN <= w["x0"] < COL_SAUT_MAX],
+            key=lambda w: w["x0"],
+        )
+        name_raw = " ".join(w["text"] for w in name_words)
         if not name_raw:
             continue
 
-        # Chercher le poids dans les cellules suivantes
+        # Poids : COL_COUL_MAX < x < COL_POIDS_MAX
         weight = None
-        for cell in cells[3:]:
-            m = RE_WEIGHT.search(cell)
-            if m:
-                w = int(m.group(1))
-                if 30 <= w <= 200:
-                    weight = w
-                    break
+        for w in words:
+            if COL_COUL_MAX < w["x0"] < COL_POIDS_MAX:
+                m = RE_WEIGHT.search(w["text"])
+                if m:
+                    v = int(m.group(1))
+                    if 30 <= v <= 200:
+                        weight = v
+                        break
 
         last_name, first_name, level = _parse_name_level(name_raw)
-
         if not last_name:
             continue
+
+        row_top  = min(w["top"] for w in words)
+        group_id = get_group_id(row_top)
 
         participants.append({
             "last_name":   last_name,
@@ -169,10 +211,50 @@ def _parse_participants(page) -> list:
             "level":       level,
             "weight":      weight,
             "jump_type":   jump_type,
-            "group_id":    groups[i] if i < len(groups) else 1,
+            "group_id":    group_id,
         })
 
     return participants
+
+
+# ---------------------------------------------------------------------------
+# Détection des groupes par doubles-lignes horizontales
+# ---------------------------------------------------------------------------
+
+def _find_group_separator_bottoms(page, table_top: float, table_bottom: float) -> list:
+    """
+    Dans les PDFs Afifly, chaque groupe est séparé par une PAIRE de lignes
+    horizontales très proches (~5.7pt d'écart).
+    Une ligne seule = en-tête ou pied de tableau.
+
+    Retourne les y-positions du bas de chaque paire (= frontière basse du séparateur).
+    Un participant est dans le groupe N si son top est supérieur à N-1 de ces y-positions.
+    """
+    h_edges = [
+        e for e in page.edges
+        if (e.get("orientation") == "h"
+            and e.get("linewidth", 0) > 0
+            and table_top < e.get("top", 0) < table_bottom)
+    ]
+
+    # Dédupliquer les positions quasi-identiques (même ligne vue plusieurs fois)
+    unique_tops = []
+    for e in sorted(h_edges, key=lambda e: e["top"]):
+        t = round(e["top"], 1)
+        if not unique_tops or t - unique_tops[-1] > 0.5:
+            unique_tops.append(t)
+
+    # Repérer les paires (gap ≤ 6.5pt entre deux lignes consécutives = double-ligne)
+    separator_bottoms = []
+    i = 0
+    while i < len(unique_tops) - 1:
+        gap = unique_tops[i + 1] - unique_tops[i]
+        if gap <= 6.5:
+            separator_bottoms.append(unique_tops[i + 1])  # y du bas de la paire
+            i += 2
+        else:
+            i += 1  # ligne seule : en-tête ou pied
+    return separator_bottoms
 
 
 # ---------------------------------------------------------------------------
@@ -184,23 +266,22 @@ def _parse_name_level(raw: str) -> tuple:
     Parse 'NOM Prenom (NIVEAU)' → (nom, prenom, niveau).
 
     Exemples :
-        "SASSI Arifa"              → ("SASSI",    "Arifa",           None)
-        "ALZIARY Benoit (C)"       → ("ALZIARY",  "Benoit",          "C")
-        "DE ROY Hubert-arnaud (BPA)" → ("DE ROY", "Hubert-arnaud",   "BPA")
+        "SASSI Arifa"                → ("SASSI",    "Arifa",           None)
+        "ALZIARY Benoit (C)"         → ("ALZIARY",  "Benoit",          "C")
+        "DE ROY Hubert-arnaud (BPA)" → ("DE ROY",   "Hubert-arnaud",   "BPA")
     """
-    # Supprimer les symboles de chef avion (◆ ♦ ● ◉)
     raw = re.sub(r'[◆♦●◉]', '', raw).strip()
 
     level = None
     m = RE_LEVEL.search(raw)
     if m:
         level = m.group(1)
-        raw = raw[:m.start()].strip()
+        raw   = raw[:m.start()].strip()
 
-    words      = raw.split()
-    last_parts = []
-    first_parts= []
-    in_last    = True
+    words       = raw.split()
+    last_parts  = []
+    first_parts = []
+    in_last     = True
 
     for word in words:
         if in_last and RE_UPPER.match(word):
@@ -210,123 +291,3 @@ def _parse_name_level(raw: str) -> tuple:
             first_parts.append(word)
 
     return " ".join(last_parts), " ".join(first_parts), level
-
-
-# ---------------------------------------------------------------------------
-# Détection des groupes par encadrements (rectangles visuels du PDF)
-# ---------------------------------------------------------------------------
-
-def _assign_groups(table_obj, page, header_idx: int) -> list:
-    """
-    Retourne une liste de group_id (int) pour chaque ligne de données.
-
-    Stratégie (3 niveaux de fallback) :
-      1. Rectangles (page.rects) : chaque encadrement visuel = un groupe.
-         C'est la méthode la plus fidèle au PDF Afifly.
-      2. Bordures épaisses (page.edges) : si les groupes ne sont pas des
-         rectangles distincts mais une table continue avec lignes épaisses.
-      3. Aucun groupe détecté → group_id = 1 pour tous.
-    """
-    data_rows = table_obj.rows[header_idx + 1:]
-    n = len(data_rows)
-
-    if n == 0:
-        return []
-
-    t_bbox       = table_obj.bbox
-    table_top    = t_bbox[1]
-    table_bottom = t_bbox[3]
-
-    # --- Méthode 1 : rectangles ---
-    groups = _assign_groups_by_rects(data_rows, page, table_top, table_bottom)
-    if groups and len(set(groups)) > 1:
-        logger.debug(f"Groupes via rectangles : {groups}")
-        return groups
-
-    # --- Méthode 2 : bordures épaisses ---
-    groups = _assign_groups_by_thick_edges(data_rows, page, table_top, table_bottom)
-    if groups and len(set(groups)) > 1:
-        logger.debug(f"Groupes via bordures épaisses : {groups}")
-        return groups
-
-    # --- Fallback : un seul groupe ---
-    logger.warning("Impossible de détecter les groupes — tous assignés au groupe 1.")
-    return [1] * n
-
-
-def _assign_groups_by_rects(data_rows, page, table_top: float, table_bottom: float) -> list:
-    """
-    Méthode 1 : chaque encadrement visible dans la zone du tableau = un groupe.
-
-    Dans le PDF Afifly, chaque groupe de formation est délimité par un
-    rectangle visuel (encadrement). On trouve ces rectangles via page.rects,
-    on les trie par position verticale, et on assigne chaque ligne au
-    rectangle qui la contient.
-    """
-    # Rectangles dans la zone du tableau, suffisamment larges pour être des encadrements
-    rects = [
-        r for r in page.rects
-        if (table_top - 2 <= r["top"] <= table_bottom + 2
-            and r["width"] > 100)           # ignorer les petits rectangles décoratifs
-    ]
-
-    if not rects:
-        return []
-
-    # Trier par position verticale (du haut vers le bas)
-    rects_sorted = sorted(rects, key=lambda r: r["top"])
-
-    groups = []
-    for row in data_rows:
-        row_center = (row.bbox[1] + row.bbox[3]) / 2
-        group_id = 1
-        for i, rect in enumerate(rects_sorted):
-            if rect["top"] - 1 <= row_center <= rect["bottom"] + 1:
-                group_id = i + 1
-                break
-        groups.append(group_id)
-
-    return groups
-
-
-def _assign_groups_by_thick_edges(data_rows, page, table_top: float, table_bottom: float) -> list:
-    """
-    Méthode 2 : dans une table continue, les lignes épaisses marquent
-    les séparations entre groupes.
-    """
-    h_edges = [
-        e for e in page.edges
-        if (e.get("orientation") == "h"
-            and table_top + 2 < e.get("top", 0) < table_bottom - 2)
-    ]
-
-    if not h_edges:
-        return []
-
-    linewidths = [e.get("linewidth", 0.5) for e in h_edges]
-    if len(set(linewidths)) < 2:
-        return []
-
-    max_lw    = max(linewidths)
-    threshold = max_lw * 0.6
-
-    thick_tops = sorted(set(
-        round(e.get("top", 0), 1)
-        for e in h_edges
-        if e.get("linewidth", 0.5) >= threshold
-    ))
-
-    group_id    = 1
-    groups      = []
-    prev_bottom = table_top
-
-    for row in data_rows:
-        row_top = row.bbox[1]
-        for ty in thick_tops:
-            if prev_bottom + 0.5 < ty < row_top + 0.5:
-                group_id += 1
-                break
-        groups.append(group_id)
-        prev_bottom = row.bbox[3]
-
-    return groups
