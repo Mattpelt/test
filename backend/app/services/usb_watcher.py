@@ -36,26 +36,21 @@ def _handle_block_event(action: str, device: pyudev.Device) -> None:
 
 def _handle_usb_camera_event(action: str, device: pyudev.Device) -> None:
     """
-    Détecte les interfaces USB de classe Imaging (bInterfaceClass=06 = PTP/MTP).
-    Chaque caméra expose une telle interface quand elle se connecte en mode photo.
+    Détecte les caméras MTP/PTP à l'event 'bind' (driver attaché, device prêt).
+    Filtre sur ID_GPHOTO2=1 ou ID_MTP_DEVICE=1 — udev les positionne pour
+    GoPro, Insta360, Sony et la plupart des caméras modernes.
     """
-    if action != "add":
+    # 'bind' = driver attaché au device (plus fiable que 'add' pour gphoto2)
+    if action != "bind":
         return
-    if device.device_type != "usb_interface":
-        return
-
-    # Vérifier la classe d'interface USB : 06 = Imaging (PTP/MTP)
-    raw = device.attributes.get("bInterfaceClass", b"")
-    iface_class = (raw.decode("ascii", errors="ignore") if isinstance(raw, bytes) else str(raw)).strip()
-    if iface_class != "06":
+    if device.device_type != "usb_device":
         return
 
-    # Remonter au device USB parent pour lire le numéro de série
-    parent = device.find_parent("usb", "usb_device")
-    if parent is None:
+    # Garder uniquement les caméras reconnues par gphoto2 ou le stack MTP
+    if not (device.get("ID_GPHOTO2") or device.get("ID_MTP_DEVICE")):
         return
 
-    serial = parent.get("ID_SERIAL_SHORT") or parent.get("ID_SERIAL")
+    serial = device.get("ID_SERIAL_SHORT") or device.get("ID_SERIAL")
     if not serial:
         logger.warning("Caméra MTP détectée sans numéro de série — onboarding requis.")
         return
