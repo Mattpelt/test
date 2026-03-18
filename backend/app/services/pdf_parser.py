@@ -12,11 +12,28 @@ RE_ROT    = re.compile(r'Rot\s+n[°o](\d+)\s*\((\d+)\s+du\s+jour\)', re.IGNORECA
 
 
 def _fix_encoding(text: str) -> str:
-    """Corrige le double-encodage Latin-1/UTF-8 (ex: 'AurÃ©lia' → 'Aurélia')."""
-    try:
-        return text.encode('latin-1').decode('utf-8')
-    except (UnicodeEncodeError, UnicodeDecodeError):
-        return text
+    """
+    Corrige le double-encodage Latin-1/UTF-8 caractère par caractère.
+    Exemple : 'AurÃ©lia' (Ã=U+00C3, ©=U+00A9) → 'Aurélia'.
+    Traite la string char par char pour tolérer les codepoints > 255.
+    """
+    result = []
+    i = 0
+    while i < len(text):
+        b1 = ord(text[i])
+        # Séquence UTF-8 à 2 octets : premier octet 0xC0–0xFF, second 0x80–0xBF
+        if 0xC0 <= b1 <= 0xFF and i + 1 < len(text):
+            b2 = ord(text[i + 1])
+            if 0x80 <= b2 <= 0xBF:
+                try:
+                    result.append(bytes([b1, b2]).decode('utf-8'))
+                    i += 2
+                    continue
+                except (UnicodeDecodeError, ValueError):
+                    pass
+        result.append(text[i])
+        i += 1
+    return ''.join(result)
 RE_DATE   = re.compile(r'Date\s*:\s*(\d{2})-(\d{2})-(\d{4})')
 RE_TIME   = re.compile(r'Heure\s*:\s*(\d{2}):(\d{2})')
 RE_WEIGHT = re.compile(r'\b(\d{2,3})\s*kg\b', re.IGNORECASE)
