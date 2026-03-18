@@ -213,17 +213,19 @@ def _parse_name_level(raw: str) -> tuple:
 
 
 # ---------------------------------------------------------------------------
-# Détection des groupes par analyse des bordures épaisses
+# Détection des groupes par encadrements (rectangles visuels du PDF)
 # ---------------------------------------------------------------------------
 
 def _assign_groups(table_obj, page, header_idx: int) -> list:
     """
     Retourne une liste de group_id (int) pour chaque ligne de données.
 
-    Principe :
-      - Les cellules d'un même groupe sont séparées par des lignes FINES.
-      - Les groupes sont séparés par des lignes ÉPAISSES.
-      - On identifie les lignes épaisses via la propriété 'linewidth' des edges pdfplumber.
+    Stratégie (3 niveaux de fallback) :
+      1. Rectangles (page.rects) : chaque encadrement visuel = un groupe.
+         C'est la méthode la plus fidèle au PDF Afifly.
+      2. Bordures épaisses (page.edges) : si les groupes ne sont pas des
+         rectangles distincts mais une table continue avec lignes épaisses.
+      3. Aucun groupe détecté → group_id = 1 pour tous.
     """
     data_rows = table_obj.rows[header_idx + 1:]
     n = len(data_rows)
@@ -231,11 +233,67 @@ def _assign_groups(table_obj, page, header_idx: int) -> list:
     if n == 0:
         return []
 
-    t_bbox       = table_obj.bbox           # (x0, top, x1, bottom)
+    t_bbox       = table_obj.bbox
     table_top    = t_bbox[1]
     table_bottom = t_bbox[3]
 
-    # Edges horizontaux strictement à l'intérieur du tableau (pas les bordures externes)
+    # --- Méthode 1 : rectangles ---
+    groups = _assign_groups_by_rects(data_rows, page, table_top, table_bottom)
+    if groups and len(set(groups)) > 1:
+        logger.debug(f"Groupes via rectangles : {groups}")
+        return groups
+
+    # --- Méthode 2 : bordures épaisses ---
+    groups = _assign_groups_by_thick_edges(data_rows, page, table_top, table_bottom)
+    if groups and len(set(groups)) > 1:
+        logger.debug(f"Groupes via bordures épaisses : {groups}")
+        return groups
+
+    # --- Fallback : un seul groupe ---
+    logger.warning("Impossible de détecter les groupes — tous assignés au groupe 1.")
+    return [1] * n
+
+
+def _assign_groups_by_rects(data_rows, page, table_top: float, table_bottom: float) -> list:
+    """
+    Méthode 1 : chaque encadrement visible dans la zone du tableau = un groupe.
+
+    Dans le PDF Afifly, chaque groupe de formation est délimité par un
+    rectangle visuel (encadrement). On trouve ces rectangles via page.rects,
+    on les trie par position verticale, et on assigne chaque ligne au
+    rectangle qui la contient.
+    """
+    # Rectangles dans la zone du tableau, suffisamment larges pour être des encadrements
+    rects = [
+        r for r in page.rects
+        if (table_top - 2 <= r["top"] <= table_bottom + 2
+            and r["width"] > 100)           # ignorer les petits rectangles décoratifs
+    ]
+
+    if not rects:
+        return []
+
+    # Trier par position verticale (du haut vers le bas)
+    rects_sorted = sorted(rects, key=lambda r: r["top"])
+
+    groups = []
+    for row in data_rows:
+        row_center = (row.bbox[1] + row.bbox[3]) / 2
+        group_id = 1
+        for i, rect in enumerate(rects_sorted):
+            if rect["top"] - 1 <= row_center <= rect["bottom"] + 1:
+                group_id = i + 1
+                break
+        groups.append(group_id)
+
+    return groups
+
+
+def _assign_groups_by_thick_edges(data_rows, page, table_top: float, table_bottom: float) -> list:
+    """
+    Méthode 2 : dans une table continue, les lignes épaisses marquent
+    les séparations entre groupes.
+    """
     h_edges = [
         e for e in page.edges
         if (e.get("orientation") == "h"
@@ -243,19 +301,14 @@ def _assign_groups(table_obj, page, header_idx: int) -> list:
     ]
 
     if not h_edges:
-        logger.debug("Aucun edge intérieur trouvé — tous les participants dans groupe 1.")
-        return [1] * n
+        return []
 
     linewidths = [e.get("linewidth", 0.5) for e in h_edges]
-
     if len(set(linewidths)) < 2:
-        # Tous les edges ont la même épaisseur : impossible de distinguer les séparateurs.
-        # Fallback : utiliser le changement de jump_type comme marqueur de groupe.
-        logger.debug("Épaisseurs identiques — fallback sur changement de jump_type.")
-        return _assign_groups_by_jump_type(table_obj, header_idx)
+        return []
 
     max_lw    = max(linewidths)
-    threshold = max_lw * 0.6          # lignes à ≥ 60 % de l'épaisseur max = séparateurs
+    threshold = max_lw * 0.6
 
     thick_tops = sorted(set(
         round(e.get("top", 0), 1)
@@ -263,41 +316,17 @@ def _assign_groups(table_obj, page, header_idx: int) -> list:
         if e.get("linewidth", 0.5) >= threshold
     ))
 
-    # Assigner les groupes en parcourant les lignes du tableau
     group_id    = 1
     groups      = []
     prev_bottom = table_top
 
     for row in data_rows:
         row_top = row.bbox[1]
-        # Une ligne épaisse entre prev_bottom et row_top → nouveau groupe
         for ty in thick_tops:
             if prev_bottom + 0.5 < ty < row_top + 0.5:
                 group_id += 1
                 break
         groups.append(group_id)
         prev_bottom = row.bbox[3]
-
-    logger.debug(f"Groupes détectés : {groups}")
-    return groups
-
-
-def _assign_groups_by_jump_type(table_obj, header_idx: int) -> list:
-    """
-    Fallback : assigne les groupes en fonction des changements de 'Type saut'.
-    Moins précis que la détection par bordures, mais robuste.
-    """
-    data_rows    = table_obj.extract()[header_idx + 1:]
-    group_id     = 1
-    groups       = []
-    prev_jt      = None
-
-    for row in data_rows:
-        cells = [str(c or "").strip() for c in row]
-        jump_type = cells[1] if len(cells) > 1 else ""
-        if prev_jt is not None and jump_type != prev_jt:
-            group_id += 1
-        groups.append(group_id)
-        prev_jt = jump_type
 
     return groups
