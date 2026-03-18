@@ -1,0 +1,27 @@
+# API
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+
+# Base de données
+sqlalchemy==2.0.30
+psycopg2-binary==2.9.9
+
+# Détection USB
+pyudev==0.24.1
+
+# Parsing PDF Afifly
+pdfplumber==0.11.0
+
+# Gmail API
+google-auth==2.29.0
+google-auth-oauthlib==1.2.0
+google-api-python-client==2.128.0
+
+# Tâches de fond (polling Gmail, nettoyage rétention)
+apscheduler==3.10.4
+
+# Variables d'environnement
+python-dotenv==1.0.1
+
+# Sécurité (hachage des mots de passe)
+passlib[bcrypt]==1.7.4

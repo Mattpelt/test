@@ -1,0 +1,3 @@
+# Forcer les fins de ligne LF (Linux) pour tous les fichiers du projet
+# Évite les problèmes lors du déploiement sur Ubuntu
+* text=auto eol=lf
