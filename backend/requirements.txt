@@ -25,6 +25,7 @@ python-dotenv==1.0.1
 
 # Sécurité (hachage des mots de passe)
 passlib[bcrypt]==1.7.4
+bcrypt==4.0.1   # passlib 1.7.4 n'est pas compatible avec bcrypt 4.1+
 
 # Validation email (requis par Pydantic EmailStr)
 email-validator==2.1.1
