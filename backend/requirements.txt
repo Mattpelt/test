@@ -12,6 +12,9 @@ pyudev==0.24.1
 # Parsing PDF Afifly
 pdfplumber==0.11.0
 
+# Transfert fichiers caméras MTP/PTP (GoPro, Insta360, Sony, etc.)
+gphoto2==2.5.0
+
 # Gmail API
 google-auth==2.29.0
 google-auth-oauthlib==1.2.0

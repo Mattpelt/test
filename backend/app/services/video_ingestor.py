@@ -3,9 +3,11 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import gphoto2 as gp
 from sqlalchemy.orm import Session
 
 from app.models.settings import Settings
@@ -18,127 +20,203 @@ logger = logging.getLogger(__name__)
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".insv", ".avi", ".mts", ".lrv", ".360"}
 
 
+# ---------------------------------------------------------------------------
+# Helpers communs
+# ---------------------------------------------------------------------------
+
+def _get_settings(db: Session) -> tuple[int, str]:
+    """Retourne (retention_days, storage_path) depuis la table settings."""
+    settings = db.query(Settings).first()
+    retention_days = settings.retention_days if settings else 90
+    storage_path = settings.video_storage_path if settings else "/mnt/videos"
+    return retention_days, storage_path
+
+
+def _find_user(serial: str, db: Session) -> User | None:
+    """Recherche le propriétaire d'une caméra par son numéro de série."""
+    user = (
+        db.query(User)
+        .filter(User.camera_serials.contains([serial]), User.is_active == True)
+        .first()
+    )
+    if not user:
+        logger.warning(
+            f"Numéro de série inconnu : {serial}. "
+            "Aucun compte associé — onboarding requis."
+        )
+    return user
+
+
+def _save_video_record(
+    db: Session,
+    file_name: str,
+    file_path: str,
+    file_size: int,
+    camera_ts: datetime,
+    user_id: int,
+    retention_days: int,
+) -> None:
+    suffix = Path(file_name).suffix.upper().lstrip(".")
+    db.add(Video(
+        file_name=file_name,
+        file_path=file_path,
+        file_format=suffix or None,
+        file_size_bytes=file_size,
+        camera_timestamp=camera_ts,
+        owner_id=user_id,
+        matching_status="UNMATCHED",
+        expires_at=datetime.utcnow() + timedelta(days=retention_days),
+    ))
+
+
+# ---------------------------------------------------------------------------
+# Path 1 : block device (SD card / mass storage)
+# ---------------------------------------------------------------------------
+
 def _find_videos(mount_path: str) -> list[Path]:
-    """Parcourt le périphérique monté et retourne tous les fichiers vidéo trouvés."""
+    """Parcourt le périphérique monté et retourne tous les fichiers vidéo."""
     videos = []
     for root, dirs, files in os.walk(mount_path):
-        dirs[:] = [d for d in dirs if not d.startswith(".")]  # ignorer les dossiers cachés
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
         for file in files:
             if Path(file).suffix.lower() in VIDEO_EXTENSIONS:
                 videos.append(Path(root) / file)
     return videos
 
 
-def _get_camera_timestamp(file_path: Path) -> datetime:
-    """
-    Lit l'horodatage d'un fichier vidéo.
-    On utilise la date de modification du fichier, qui correspond
-    à l'horloge interne de la caméra au moment de l'enregistrement.
-    """
-    mtime = os.path.getmtime(file_path)
-    return datetime.fromtimestamp(mtime)
-
-
 def ingest_device(device_node: str, serial: str, db: Session) -> None:
-    """
-    Point d'entrée principal du module d'ingestion.
-
-    1. Cherche le propriétaire de la caméra (via le numéro de série)
-    2. Monte le périphérique en lecture seule
-    3. Copie les fichiers vidéo vers le stockage
-    4. Enregistre chaque vidéo en base de données
-    5. Démonte le périphérique
-    """
-
-    # --- 1. Identifier le propriétaire ---
-    user = (
-        db.query(User)
-        .filter(User.camera_serials.contains([serial]), User.is_active == True)
-        .first()
-    )
-
+    """Ingestion via mount (SD card / caméra mass storage)."""
+    user = _find_user(serial, db)
     if not user:
-        logger.warning(
-            f"Numéro de série inconnu : {serial}. "
-            "Aucun compte associé — onboarding requis (F01/F02)."
-        )
-        # TODO : notifier l'interface pour déclencher le flux de création de compte
         return
 
-    logger.info(f"Caméra reconnue : {serial} → {user.first_name} {user.last_name}")
-
-    # --- 2. Récupérer la configuration ---
-    settings = db.query(Settings).first()
-    retention_days = settings.retention_days if settings else 90
-    storage_path = settings.video_storage_path if settings else "/mnt/videos"
-
-    # --- 3. Monter le périphérique en lecture seule ---
+    retention_days, storage_path = _get_settings(db)
     mount_point = tempfile.mkdtemp(prefix="camera_")
+
     try:
         subprocess.run(
             ["mount", "-o", "ro", device_node, mount_point],
-            check=True,
-            timeout=15,
+            check=True, timeout=15,
         )
-        logger.info(f"Périphérique monté : {device_node} → {mount_point}")
+        logger.info(f"Monté : {device_node} → {mount_point}")
 
-        # --- 4. Trouver les fichiers vidéo ---
         videos = _find_videos(mount_point)
-        logger.info(f"{len(videos)} fichier(s) vidéo trouvé(s) sur {device_node}")
+        logger.info(f"{len(videos)} vidéo(s) trouvée(s)")
 
-        # --- 5. Copier et enregistrer ---
-        ingested = 0
-        skipped = 0
+        ingested = skipped = 0
+        date_str = datetime.now().strftime("%Y-%m-%d")
 
         for video_file in videos:
-            # Destination : /mnt/videos/{user_id}/{YYYY-MM-DD}/{nom_fichier}
-            dest_dir = (
-                Path(storage_path)
-                / str(user.id)
-                / datetime.now().strftime("%Y-%m-%d")
-            )
+            dest_dir = Path(storage_path) / str(user.id) / date_str
             dest_dir.mkdir(parents=True, exist_ok=True)
             dest_path = dest_dir / video_file.name
 
-            # Ne pas réingérer un fichier déjà présent
             if dest_path.exists():
                 skipped += 1
                 continue
 
-            # Copie en préservant les métadonnées (dont la date de modification)
             shutil.copy2(video_file, dest_path)
-
-            camera_ts = _get_camera_timestamp(video_file)
-            expires_at = datetime.utcnow() + timedelta(days=retention_days)
-
-            db_video = Video(
-                file_name=video_file.name,
-                file_path=str(dest_path),
-                file_format=video_file.suffix.upper().lstrip("."),
-                file_size_bytes=video_file.stat().st_size,
-                camera_timestamp=camera_ts,
-                owner_id=user.id,
-                matching_status="UNMATCHED",
-                expires_at=expires_at,
-            )
-            db.add(db_video)
+            camera_ts = datetime.fromtimestamp(os.path.getmtime(video_file))
+            _save_video_record(db, video_file.name, str(dest_path),
+                               video_file.stat().st_size, camera_ts,
+                               user.id, retention_days)
             ingested += 1
 
         db.commit()
         logger.info(
-            f"Ingestion terminée pour {user.first_name} {user.last_name} : "
-            f"{ingested} vidéo(s) ingérée(s), {skipped} ignorée(s) (déjà présentes)."
+            f"{user.first_name} {user.last_name} — "
+            f"{ingested} ingérée(s), {skipped} ignorée(s)."
         )
 
     except subprocess.CalledProcessError as e:
         logger.error(f"Impossible de monter {device_node} : {e}")
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Erreur ingestion block : {e}")
+    finally:
+        subprocess.run(["umount", mount_point], timeout=10)
+        os.rmdir(mount_point)
+
+
+# ---------------------------------------------------------------------------
+# Path 2 : MTP/PTP (GoPro, Insta360, Sony, etc.)
+# ---------------------------------------------------------------------------
+
+def _list_mtp_videos(camera: gp.Camera, path: str = "/") -> list[tuple[str, str]]:
+    """Parcourt récursivement la caméra MTP et retourne (dossier, nom) des vidéos."""
+    results = []
+    try:
+        for name, _ in camera.folder_list_files(path):
+            if Path(name).suffix.lower() in VIDEO_EXTENSIONS:
+                results.append((path, name))
+        for name, _ in camera.folder_list_folders(path):
+            sub = path.rstrip("/") + "/" + name
+            results.extend(_list_mtp_videos(camera, sub))
+    except gp.GPhoto2Error as e:
+        logger.debug(f"MTP list error at {path} : {e}")
+    return results
+
+
+def ingest_mtp_device(serial: str, db: Session) -> None:
+    """
+    Ingestion via MTP/PTP (gphoto2).
+    Compatible avec GoPro, Insta360, Sony et la plupart des caméras modernes.
+    """
+    user = _find_user(serial, db)
+    if not user:
+        return
+
+    retention_days, storage_path = _get_settings(db)
+
+    # Laisser le temps au kernel de finaliser l'énumération USB
+    time.sleep(2)
+
+    camera = gp.Camera()
+    try:
+        camera.init()
+    except gp.GPhoto2Error as e:
+        logger.error(f"Impossible d'initialiser la caméra MTP ({serial}) : {e}")
+        return
+
+    try:
+        video_files = _list_mtp_videos(camera)
+        logger.info(f"{len(video_files)} vidéo(s) MTP trouvée(s) — {serial}")
+
+        ingested = skipped = 0
+        date_str = datetime.now().strftime("%Y-%m-%d")
+
+        for folder, name in video_files:
+            dest_dir = Path(storage_path) / str(user.id) / date_str
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            dest_path = dest_dir / name
+
+            if dest_path.exists():
+                skipped += 1
+                continue
+
+            # Horodatage caméra depuis les métadonnées MTP
+            try:
+                info = camera.file_get_info(folder, name)
+                camera_ts = datetime.fromtimestamp(info.file.mtime)
+            except gp.GPhoto2Error:
+                camera_ts = datetime.utcnow()
+
+            camera_file = camera.file_get(folder, name, gp.GP_FILE_TYPE_NORMAL)
+            camera_file.save(str(dest_path))
+
+            file_size = dest_path.stat().st_size
+            _save_video_record(db, name, str(dest_path), file_size,
+                               camera_ts, user.id, retention_days)
+            ingested += 1
+
+        db.commit()
+        logger.info(
+            f"{user.first_name} {user.last_name} (MTP) — "
+            f"{ingested} ingérée(s), {skipped} ignorée(s)."
+        )
 
     except Exception as e:
         db.rollback()
-        logger.error(f"Erreur inattendue lors de l'ingestion : {e}")
-
+        logger.error(f"Erreur ingestion MTP : {e}")
     finally:
-        # --- 6. Démonter proprement ---
-        subprocess.run(["umount", mount_point], timeout=10)
-        os.rmdir(mount_point)
-        logger.info(f"Périphérique démonté : {device_node}")
+        camera.exit()

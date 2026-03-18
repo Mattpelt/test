@@ -2,10 +2,12 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Dépendances système nécessaires pour pyudev (détection USB)
+# Dépendances système : pyudev (USB) + libgphoto2 (MTP/PTP caméras)
 RUN apt-get update && apt-get install -y \
     udev \
     libsystemd-dev \
+    libgphoto2-dev \
+    gphoto2 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
