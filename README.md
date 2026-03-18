@@ -1,7 +1,7 @@
 # ========================================================
 DOCUMENT DE BESOINS FONCTIONNELS
 Plateforme d'échange vidéo pour parachutistes
-Version 0.4 — Mars 2026
+Version 0.7 — Mars 2026
 ========================================================
 
 --------------------------------------------------------
@@ -18,6 +18,9 @@ v0.5 — Refonte schéma BDD : table rots scindée en rots
         (en-tête) + rot_participants (une ligne par sautant)
 v0.6 — Ajout architecture Docker (Compose + conteneur
         privilégié pour détection USB)
+v0.7 — État d'avancement session 2 : parser PDF validé,
+        ingestion USB/MTP en cours, détail architecture
+        détection caméra, API GoPro HTTP confirmée
 
 
 --------------------------------------------------------
@@ -82,24 +85,37 @@ F02 — Si la détection automatique du numéro de série
       permet d'identifier le propriétaire et de créer
       son compte.
 
-F03 — À la création du compte, le sautant renseigne ses informations minimales : prénom, nom, adresse email, et valide la correspondance avec l'output d'Afifly
+F03 — À la création du compte, le sautant renseigne ses
+      informations minimales : prénom, nom, adresse email,
+      et valide la correspondance avec l'output d'Afifly.
 
 F04 — L'association numéro de série <-> compte sautant
       est persistée pour les branchements futurs
       (reconnaissance automatique dès le 2ème branchement).
-F05 - Permettre a l'utilisateur d'associer ou reassocier une caméra sur le pupitre. Cette feature existe pour traiter les cas de nouvelle caméra et de problème d'identification de caméra  existante.
+
+F05 — Permettre à l'utilisateur d'associer ou réassocier
+      une caméra sur le pupitre. Cette feature existe pour
+      traiter les cas de nouvelle caméra et de problème
+      d'identification de caméra existante.
 
 
 4.2 INGESTION DES VIDÉOS
 -------------------------
-F05 — Le sautant branche sa caméra au pupitre via câble
-      USB (solution principale) ou via lecteur de carte SD
-      (solution de repli).
+F06 — Le sautant branche sa caméra au pupitre via câble
+      USB (solution principale). Le système détecte
+      automatiquement le périphérique, identifie le
+      propriétaire via le numéro de série, et lance
+      l'ingestion automatique des fichiers vidéo sans
+      action supplémentaire de l'utilisateur.
 
-F06 — Le système détecte automatiquement le périphérique
-      branché, identifie le propriétaire via le numéro de
-      série, et lance l'ingestion automatique des fichiers
-      vidéo sans action supplémentaire de l'utilisateur.
+      NOTE ARCHITECTURE (décision session 2) :
+      Les caméras modernes (GoPro, Insta360, Sony)
+      ne se montent PAS en mass storage — elles utilisent
+      MTP/PTP. Le lecteur de carte SD a été écarté car
+      ergonomiquement problématique (confusion entre
+      utilisateurs, démontage difficile selon support casque).
+      Voir section 8.7 pour le détail de l'architecture
+      d'ingestion multi-marques.
 
 F07 — Chaque fichier vidéo ingéré conserve son timestamp
       d'origine (horloge interne de la caméra), qui servira
@@ -129,17 +145,14 @@ F10 — Le parser extrait les informations suivantes de
         - Immatriculation avion, pilote, chef avion
 
       LISTE DES SAUTANTS :
-        - Nom, prénom
+        - Nom, prénom (avec correction encodage accents)
         - Niveau (A / B / BPA / C / D)
         - Poids, type de saut
 
       GROUPES DE FORMATION :
-        - Reconstitués en analysant les bordures visuelles
-          des cellules du tableau PDF (encadrements
-          matérialisant les groupes par séparation
-          graphique).
-        - Technologie cible : pdfplumber avec analyse
-          géométrique des bounding boxes.
+        - Détectés par paires de lignes horizontales
+          (gap ~5.67pt) dans le PDF pdfplumber.
+        - Validé sur 2 PDFs réels (voir section 8.8).
 
 F11 — Le système associe automatiquement chaque vidéo
       ingérée à un rot en croisant le timestamp du fichier
@@ -150,16 +163,9 @@ F11 — Le système associe automatiquement chaque vidéo
         - 1 seul rot dans la fenêtre  -> association
           automatique
         - Plusieurs rots dans la fenêtre -> statut AMBIGU,
-          remonte en interface admin pour correction
-          manuelle
+          remonte en interface admin pour correction manuelle
         - Aucun rot dans la fenêtre -> statut NON_MATCHÉ,
-          remonte en interface admin pour correction
-          manuelle
-
-      NOTE : La fenêtre de tolérance est un paramètre
-      configurable par le super-admin, à calibrer en phase
-      de test (certains sautants enchaînent 1 saut toutes
-      les 30 min, d'autres 1 saut toutes les 2h).
+          remonte en interface admin pour correction manuelle
 
 F12 — En cas d'ambiguïté ou d'échec du matching, le
       super-admin peut corriger manuellement l'association
@@ -248,7 +254,32 @@ F22 — Le système supprime automatiquement les vidéos dont
 7. POINTS OUVERTS RESTANTS
 --------------------------------------------------------
 Tous les points ouverts initiaux sont fermés.
-Aucun point ouvert en suspens à ce stade.
+
+POINTS OUVERTS SESSION 2 :
+
+PO-7 : Ingestion GoPro via HTTP (Open GoPro API)
+  L'API HTTP de la GoPro est confirmée fonctionnelle
+  (172.26.166.51:8080/gopro/media/list répond).
+  Il faut implémenter le téléchargement HTTP dans
+  video_ingestor.py et tester avec des vidéos réelles
+  sur la caméra.
+
+PO-8 : Règle udev sur l'hôte Ubuntu
+  La détection automatique au branchement nécessite
+  une règle udev sur l'hôte (pas dans Docker).
+  Voir section 8.7 pour l'architecture cible.
+
+PO-9 : Validation ingestion gphoto2 sur bare-metal
+  gphoto2 détecte correctement la caméra dans le
+  container mais le transfert PTP échoue en USB/IP
+  (latence réseau trop élevée pour le protocole PTP).
+  À valider sur le vrai hardware bare-metal.
+
+PO-10 : Moteur de matching vidéo ↔ rot (F11/F12)
+PO-11 : Gmail polling + ingestion PDF auto (F09)
+PO-12 : Notifications email (F13)
+PO-13 : Nettoyage rétention automatique (F22)
+PO-14 : Frontend (hors périmètre session actuelle)
 
 
 ========================================================
@@ -270,10 +301,16 @@ L'architecture est agnostique au fabricant : seul Ubuntu
 est requis. Les vidéos sont stockées sur un ou deux HDDs
 SATA internes dont le chemin de montage est configurable.
 
-  [Caméra USB/SD]
+  [Caméra USB]
        |
        v
-  [Backend Python]  <-->  [PostgreSQL]
+  [udev HOST] → HTTP POST /internal/camera-connected
+       |
+       v
+  [Backend Python/Docker]  <-->  [PostgreSQL]
+       |
+       ├── GoPro    → API HTTP Open GoPro (port 8080)
+       └── Autres   → gphoto2 (MTP/PTP)
        |
        v
   [HDDs SATA : stockage vidéos]
@@ -282,18 +319,34 @@ SATA internes dont le chemin de montage est configurable.
   [Interface Web — phase ultérieure]
 
 
-8.2 COMPOSANTS BACKEND
+8.2 ENVIRONNEMENT DE DÉVELOPPEMENT
+------------------------------------
+Développement : PC Windows 11 (Matthieu)
+VM de test    : Ubuntu, Hyper-V, IP 192.168.1.97
+Repo Git      : https://github.com/Mattpelt/test
+Workflow      : commit sur Windows → push GitHub → pull sur VM
+
+Déploiement sur VM :
+  cd ~/skydivemediahub && git pull && docker compose up --build -d
+
+API accessible à : http://192.168.1.97:8000
+Swagger UI       : http://192.168.1.97:8000/docs
+
+
+8.3 COMPOSANTS BACKEND
 -----------------------
-Langage     : Python 3.11+
-Framework   : FastAPI (API REST légère et performante)
-ORM         : SQLAlchemy (abstraction base de données)
-Tâches fond : APScheduler (polling Gmail, nettoyage rétention)
-PDF parsing : pdfplumber (extraction contenu + géométrie)
-USB detect  : pyudev (détection branchement caméra sur Linux)
-Email       : Gmail API + OAuth2
+Langage      : Python 3.11+
+Framework    : FastAPI (API REST)
+ORM          : SQLAlchemy
+Tâches fond  : APScheduler (polling Gmail, nettoyage rétention)
+PDF parsing  : pdfplumber (extraction contenu + géométrie)
+USB detect   : udev HOST → HTTP (voir 8.7)
+MTP/PTP      : gphoto2 (caméras non-GoPro)
+GoPro        : Open GoPro HTTP API (voir 8.7)
+Email        : Gmail API + OAuth2
 
 
-8.3 BASE DE DONNÉES
+8.4 BASE DE DONNÉES
 --------------------
 Moteur : PostgreSQL 15+
 
@@ -304,150 +357,242 @@ Choix justifié par rapport à SQLite :
   - Support natif des tableaux (TEXT[]) et du JSON (JSONB)
 
 Connexion configurée via variable d'environnement :
-  DATABASE_URL=postgresql://user:password@localhost:5432/skydivemediahub
+  DATABASE_URL=postgresql://user:password@db:5432/skydivemediahub
 
 
-8.4 SCHÉMA DES TABLES
+8.5 SCHÉMA DES TABLES
 ----------------------
 
 TABLE : users
-  Contient toutes les informations d'un sautant,
-  y compris ses caméras associées.
-
   id               SERIAL PRIMARY KEY
   first_name       TEXT NOT NULL
   last_name        TEXT NOT NULL
   email            TEXT UNIQUE NOT NULL
   password_hash    TEXT NOT NULL
-  camera_serials   TEXT[]           -- tableau des numéros de série
-  afifly_name      TEXT             -- nom tel qu'il apparaît dans Afifly
-                                    -- (pour le matching automatique)
+  camera_serials   TEXT[]           -- ex: '{"C3491124633666"}'
+  afifly_name      TEXT             -- matching avec PDF Afifly
   is_admin         BOOLEAN DEFAULT FALSE
   is_active        BOOLEAN DEFAULT TRUE
   created_at       TIMESTAMP DEFAULT NOW()
 
-  NOTE : camera_serials est un tableau natif PostgreSQL.
-  Exemple : '{"SN-GOPRO-12345", "SN-INSTA360-67890"}'
-  Permet d'associer plusieurs caméras à un même sautant
-  (nouvelle caméra, caméra de remplacement, etc.)
-
 
 TABLE : rots
-  Contient uniquement l'en-tête d'une rotation, tel
-  qu'extrait du PDF Afifly. Une ligne par rot.
-
   id                  SERIAL PRIMARY KEY
-  rot_number          INTEGER NOT NULL        -- numéro global (ex : 1631)
-  day_number          INTEGER                 -- numéro dans la journée
+  rot_number          INTEGER NOT NULL        -- ex : 1631
+  day_number          INTEGER                 -- ex : 9 (du jour)
   rot_date            DATE NOT NULL
-  rot_time            TIME NOT NULL           -- heure officielle du rot
-  plane_registration  TEXT
+  rot_time            TIME NOT NULL
+  plane_registration  TEXT                    -- ex : D-IAAI
   pilot               TEXT
   chef_avion          TEXT
-  source_pdf_path     TEXT                    -- chemin du PDF source archivé
-  parse_status        TEXT DEFAULT 'OK'       -- OK / ERREUR
+  source_pdf_path     TEXT
+  parse_status        TEXT DEFAULT 'OK'
   parsed_at           TIMESTAMP DEFAULT NOW()
 
 
 TABLE : rot_participants
-  Contient une ligne par sautant par rot.
-  C'est ici que sont stockés le groupe de formation,
-  le niveau et les détails individuels de chaque sautant
-  pour un rot donné.
-
   id              SERIAL PRIMARY KEY
   rot_id          INTEGER REFERENCES rots(id) NOT NULL
-  user_id         INTEGER REFERENCES users(id)  -- NULL si pas encore matché
-                                                -- à un compte sautant
-  afifly_name     TEXT NOT NULL               -- nom tel qu'il apparaît dans
-                                                -- le PDF (ex : "MARTIN Jules")
-                                                -- sert au matching automatique
-                                                -- avec users.afifly_name
-  level           TEXT                        -- A / B / BPA / C / D
-  weight          INTEGER                     -- poids en kg
-  jump_type       TEXT                        -- ex : FS4, VRW, AFF...
-  group_id        INTEGER                     -- numéro du groupe dans ce rot
-                                                -- (1, 2, 3... selon les
-                                                -- encadrements du PDF)
-
-  EXEMPLE : rot n°1631 avec 20 sautants = 20 lignes dans
-  cette table, toutes liées au même rot_id.
-
-  NOTE : user_id peut être NULL dans deux cas :
-    1. Le sautant n'a pas encore de compte sur la plateforme.
-    2. Le nom Afifly ne correspond à aucun compte connu.
-    Dans les deux cas, le super-admin peut faire le lien
-    manuellement.
+  user_id         INTEGER REFERENCES users(id)  -- NULL si non matché
+  afifly_name     TEXT NOT NULL
+  level           TEXT                        -- A/B/BPA/C/D
+  weight          INTEGER
+  jump_type       TEXT
+  group_id        INTEGER                     -- groupe dans ce rot
 
 
 TABLE : videos
-  Contient tous les détails d'un fichier vidéo ingéré,
-  ainsi que le résultat du matching avec un rot et un groupe.
-
   id                SERIAL PRIMARY KEY
   file_name         TEXT NOT NULL
-  file_path         TEXT NOT NULL             -- chemin absolu sur le HDD
-  file_format       TEXT                      -- MP4, MOV, INSV, etc.
+  file_path         TEXT NOT NULL
+  file_format       TEXT                      -- MP4, MOV, INSV...
   file_size_bytes   BIGINT
-  camera_timestamp  TIMESTAMP NOT NULL        -- horodatage lu sur le fichier
+  camera_timestamp  TIMESTAMP NOT NULL
   owner_id          INTEGER REFERENCES users(id)
-  rot_id            INTEGER REFERENCES rots(id)  -- NULL si non matché
-  group_id          INTEGER                   -- group_id dans le rot (NULL si non matché)
-  matching_status   TEXT DEFAULT 'UNMATCHED'  -- MATCHED / AMBIGUOUS / UNMATCHED
+  rot_id            INTEGER REFERENCES rots(id)
+  group_id          INTEGER
+  matching_status   TEXT DEFAULT 'UNMATCHED'  -- MATCHED/AMBIGUOUS/UNMATCHED
   ingested_at       TIMESTAMP DEFAULT NOW()
-  expires_at        TIMESTAMP                 -- calculé à l'ingestion selon rétention
+  expires_at        TIMESTAMP
 
 
-TABLE : settings
-  Table de configuration système (une seule ligne).
-  Modifiable uniquement par le super-admin.
-
+TABLE : settings (une seule ligne, initialisée au démarrage)
   id                        SERIAL PRIMARY KEY
   retention_days            INTEGER DEFAULT 90
-  matching_window_minutes   INTEGER DEFAULT 45   -- à calibrer en phase de test
+  matching_window_minutes   INTEGER DEFAULT 45
   video_storage_path        TEXT DEFAULT '/mnt/videos'
   updated_at                TIMESTAMP DEFAULT NOW()
 
 
-8.5 CONTENEURISATION (DOCKER)
-------------------------------
-L'ensemble du backend tourne via Docker Compose.
-Cela garantit un déploiement identique sur tout PC Ubuntu,
-quel que soit le fabricant (Lenovo, HP, Dell, etc.).
+8.6 ENDPOINTS API IMPLÉMENTÉS
+-------------------------------
 
-  SERVICES DOCKER COMPOSE :
+/users
+  POST   /users                    — créer un compte
+  GET    /users                    — lister tous les sautants actifs
+  GET    /users/{id}               — détail d'un sautant
+  PATCH  /users/{id}/cameras       — associer numéros de série caméras
+  DELETE /users/{id}               — désactiver (soft delete)
+
+/rots
+  POST   /rots/debug-pdf           — diagnostic PDF brut (à conserver)
+  POST   /rots/parse-preview       — parser PDF sans sauvegarder
+  POST   /rots                     — parser PDF et sauvegarder en DB
+  GET    /rots                     — lister toutes les rotations
+  GET    /rots/{id}                — détail d'une rotation
+
+/videos
+  GET    /videos                   — lister toutes les vidéos
+  GET    /videos/user/{user_id}    — vidéos d'un sautant
+  GET    /videos/{id}              — détail d'une vidéo
+  DELETE /videos/{id}              — supprimer une vidéo
+
+/internal
+  POST   /internal/camera-connected — déclencheur d'ingestion
+                                      (appelé par règle udev hôte)
+
+
+8.7 ARCHITECTURE DÉTECTION ET INGESTION CAMÉRA
+------------------------------------------------
+
+PROBLÈME :
+Les caméras modernes (GoPro, Insta360, Sony) ne se montent
+pas en USB Mass Storage. Elles utilisent MTP/PTP.
+Le lecteur de carte SD a été écarté (ergonomie : confusion
+entre utilisateurs, démontage difficile selon support casque).
+
+PROBLÈME DOCKER/NETLINK :
+pyudev dans un container Docker ne reçoit pas les events
+kernel USB — le socket netlink NETLINK_KOBJECT_UEVENT est
+isolé par namespace réseau. Même en conteneur privilégié,
+les events ne transitent pas.
+
+SOLUTION RETENUE :
+  1. Règle udev sur l'HÔTE Ubuntu détecte le branchement
+  2. La règle appelle curl vers l'API du container
+  3. L'endpoint /internal/camera-connected déclenche
+     l'ingestion dans le container
+
+  Fichier à créer sur l'hôte :
+  /etc/udev/rules.d/99-skydive-camera.rules
+
+  Contenu (TODO — PO-8) :
+    ACTION=="bind", SUBSYSTEM=="usb", ENV{ID_GPHOTO2}=="1", \
+    RUN+="/usr/local/bin/skydive-camera.sh"
+
+  Script /usr/local/bin/skydive-camera.sh :
+    #!/bin/bash
+    curl -s -X POST http://localhost:8000/internal/camera-connected \
+      -H "Content-Type: application/json" \
+      -d "{\"serial\": \"$ID_SERIAL_SHORT\", \"mtp\": true}"
+
+DEUX PATHS D'INGESTION :
+
+  PATH A — GoPro (VID=2672) :
+    Quand une GoPro se branche, elle crée :
+      - Une interface réseau virtuelle USB NCM (enx...)
+      - Une interface PTP
+    L'hôte reçoit une IP dans le subnet 172.2X.XXX.52/24
+    La GoPro est accessible à 172.2X.XXX.51 port 8080
+    Endpoints Open GoPro API :
+      GET /gopro/media/list     → liste des fichiers
+      GET /videos/DCIM/...      → téléchargement
+    CONFIRMÉ FONCTIONNEL en test USB/IP (session 2)
+    API répond : {"id": "...", "media": [...]}
+    À IMPLÉMENTER : video_ingestor.py → ingest_gopro_http()
+
+  PATH B — Autres marques (Insta360, Sony, etc.) :
+    gphoto2 via PTP/MTP
+    gphoto2 détecte les caméras dans le container ✓
+    Le transfert PTP échoue en USB/IP (latence trop élevée)
+    SERA VALIDÉ sur bare-metal uniquement
+    Déjà implémenté : video_ingestor.py → ingest_mtp_device()
+
+DÉTECTION DU TYPE DE CAMÉRA (dans la règle udev ou l'endpoint) :
+  ID_VENDOR_ID=2672 → GoPro → PATH A (HTTP)
+  autres            → PATH B (gphoto2)
+
+
+8.8 PARSER PDF AFIFLY — ÉTAT ET VALIDATION
+--------------------------------------------
+
+TECHNOLOGIE :
+  pdfplumber avec extract_words() + filtrage par positions x/y.
+  La section participants N'EST PAS détectée comme table
+  par pdfplumber — on utilise les coordonnées des mots.
+
+COLONNES (coordonnées x en points PDF) :
+  Haut.    : x < 57
+  Type saut: 57 ≤ x < 165
+  Sautant  : 207 ≤ x < 315
+  Couleur  : 315 ≤ x < 395
+  Poids    : 395 ≤ x < 423
+
+DÉTECTION DES GROUPES :
+  Paires de lignes horizontales avec gap ≤ 6.5pt
+  = séparateur de groupe. 7 séparateurs = 8 groupes.
+  La position y du bas de chaque paire détermine la
+  frontière entre groupes.
+
+TOLÉRANCE DE GROUPEMENT DES LIGNES :
+  round(top / 5) * 5  (5pt — corrige l'écart de 0.14pt
+  entre altitude et nom sur certaines lignes comme CAMBEFORT)
+
+CRITÈRE D'IDENTIFICATION D'UNE LIGNE PARTICIPANT :
+  Présence d'un nom dans la colonne Sautant (207-315).
+  L'altitude n'est PAS requise (les clients Tandem n'en
+  ont pas dans cette colonne).
+
+ENCODAGE :
+  Les PDFs Afifly utilisent parfois des bytes UTF-8
+  interprétés comme Latin-1 par pdfplumber.
+  Correction char par char : si deux chars consécutifs
+  ont des byte values formant une séquence UTF-8 valide
+  → décoder. Corrige é, à, ê, etc.
+
+VALIDATION SUR PDFs RÉELS :
+  rot n°1614 (rot 15 du jour, 29/11/2025) :
+    15 participants, 8 groupes — validé ✓
+    Tandem : SASSI(client) + ALZIARY(VDO) + BRIERE(moniteur)
+    Avant B : TEIXEIRA, BRUCHET, LEBOUCHER,
+              JEUNE-RIGOUARD, LEGENDRE (groupes 2-5)
+    Saut Classic : CAILLAULT+PASTOUREL, DE ROY+CHAFFARD+
+                   BALDUS+CHWALEK, CAMBEFORT (groupes 6-8)
+
+  rot n°1631 (rot 9 du jour, 07/12/2025) :
+    9 participants, 3 groupes — validé ✓
+    Groupe 1 : SIDERI, CHAFFARD, BRIERE J., LESAGE
+    Groupe 2 : GENNESSON, NOEL, ANNABI, STUMPF
+    Groupe 3 : BRIERE Tom (solo)
+
+
+8.9 CONTENEURISATION (DOCKER)
+------------------------------
 
   service : db
     Image     : postgres:15
-    Rôle      : base de données PostgreSQL
+    Healthcheck: pg_isready toutes les 5s, 10 retries
     Volume    : données persistées sur le disque hôte
 
   service : backend
-    Image     : Python 3.11 (image custom)
-    Rôle      : API FastAPI + ingestion USB + polling Gmail
-                + parsing PDF + matching
-    Mode      : conteneur privilégié (--privileged)
-    Volume    : accès au répertoire de stockage vidéo (HDD)
+    Image     : Python 3.11-slim custom
+    Mode      : privileged: true
+    Dépend de : db (condition: service_healthy)
+    Packages système : udev, libsystemd-dev,
+                       libgphoto2-dev, gphoto2
+    Packages Python  : voir requirements.txt
 
-  DÉMARRAGE DU SYSTÈME :
-    docker compose up
-    (une seule commande, depuis n'importe quelle machine Ubuntu)
+  DÉMARRAGE :
+    docker compose up --build -d
 
-  CHOIX DU CONTENEUR PRIVILÉGIÉ POUR L'USB :
-    Le conteneur backend tourne en mode privilégié afin
-    d'accéder aux périphériques USB via pyudev.
-    Ce choix a été retenu car :
-      - Le système est local (pas d'exposition internet)
-      - Les données sont peu sensibles (vidéos de loisir)
-      - Cela évite une configuration udev sur l'hôte et
-        maintient toute la logique dans Docker Compose
-    Le risque principal (accès accidentel à un mauvais
-    périphérique) est mitigé par la précision du code
-    d'ingestion sur les périphériques ciblés.
+  VARIABLES D'ENVIRONNEMENT (.env) :
+    DATABASE_URL=postgresql://...
+    POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB
+    VIDEO_STORAGE_PATH=/mnt/videos
 
 
-8.6 FLEXIBILITÉ MATÉRIELLE
-----------------------------
+8.10 FLEXIBILITÉ MATÉRIELLE
+-----------------------------
 Le système est conçu pour fonctionner sur tout PC Ubuntu,
 quel que soit le fabricant (Lenovo, HP, Dell, etc.).
 Les seuls paramètres matériel-dépendants sont :
