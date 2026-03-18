@@ -45,18 +45,37 @@ def debug_pdf(file: UploadFile = File(...)):
                 for r in page.rects
             ]
 
-            unique_linewidths = sorted(set(
-                round(e.get("linewidth", 0), 2)
+            # Tous les edges horizontaux avec leurs coordonnées complètes
+            all_h_edges = sorted([
+                {
+                    "top":       round(e.get("top", 0), 2),
+                    "x0":        round(e.get("x0", 0), 2),
+                    "x1":        round(e.get("x1", 0), 2),
+                    "linewidth": round(e.get("linewidth", 0), 2),
+                }
                 for e in page.edges
                 if e.get("orientation") == "h"
-            ))
+            ], key=lambda e: e["top"])
+
+            # Mots de la page avec position (filtrés sur la moitié basse = participants)
+            page_mid = page.height / 2
+            participant_words = [
+                {
+                    "text": w["text"],
+                    "top":  round(w["top"], 2),
+                    "x0":   round(w["x0"], 2),
+                }
+                for w in page.extract_words()
+                if w["top"] > page_mid
+            ]
 
             return {
                 "num_tables": len(tables_info),
                 "tables": tables_info,
                 "num_rects": len(rects_info),
                 "rects": rects_info,
-                "horizontal_edge_linewidths": unique_linewidths,
+                "all_horizontal_edges": all_h_edges,
+                "participant_area_words": participant_words,
             }
     finally:
         os.unlink(tmp_path)
