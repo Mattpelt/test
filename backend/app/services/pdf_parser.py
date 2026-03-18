@@ -9,6 +9,14 @@ logger = logging.getLogger(__name__)
 
 # --- Regex ---
 RE_ROT    = re.compile(r'Rot\s+n[°o](\d+)\s*\((\d+)\s+du\s+jour\)', re.IGNORECASE)
+
+
+def _fix_encoding(text: str) -> str:
+    """Corrige le double-encodage Latin-1/UTF-8 (ex: 'AurÃ©lia' → 'Aurélia')."""
+    try:
+        return text.encode('latin-1').decode('utf-8')
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return text
 RE_DATE   = re.compile(r'Date\s*:\s*(\d{2})-(\d{2})-(\d{4})')
 RE_TIME   = re.compile(r'Heure\s*:\s*(\d{2}):(\d{2})')
 RE_WEIGHT = re.compile(r'\b(\d{2,3})\s*kg\b', re.IGNORECASE)
@@ -156,7 +164,7 @@ def _parse_participants(page) -> list:
             continue
         if w["top"] >= table_bottom:
             continue
-        row_key = round(w["top"] / 3) * 3   # tolérance 3pt
+        row_key = round(w["top"] / 5) * 5   # tolérance 5pt
         rows_dict[row_key].append(w)
 
     # --- 4. Parser chaque ligne participant ---
@@ -165,9 +173,14 @@ def _parse_participants(page) -> list:
     for row_key in sorted(rows_dict.keys()):
         words = rows_dict[row_key]
 
-        # La colonne Haut. doit contenir un entier (altitude ex: 4000)
-        altitude_words = [w for w in words if w["text"].isdigit() and w["x0"] < COL_HAUT_MAX]
-        if not altitude_words:
+        # Critère principal : présence d'un nom dans la colonne Sautant
+        # (l'altitude peut être absente pour les clients Tandem)
+        name_words = sorted(
+            [w for w in words if COL_SAUT_MIN <= w["x0"] < COL_SAUT_MAX],
+            key=lambda w: w["x0"],
+        )
+        name_raw = " ".join(w["text"] for w in name_words)
+        if not name_raw:
             continue
 
         # Type de saut : COL_HAUT_MAX < x < COL_TYPE_MAX
@@ -176,15 +189,6 @@ def _parse_participants(page) -> list:
             key=lambda w: w["x0"],
         )
         jump_type = " ".join(w["text"] for w in type_words)
-
-        # Sautant : COL_SAUT_MIN ≤ x < COL_SAUT_MAX
-        name_words = sorted(
-            [w for w in words if COL_SAUT_MIN <= w["x0"] < COL_SAUT_MAX],
-            key=lambda w: w["x0"],
-        )
-        name_raw = " ".join(w["text"] for w in name_words)
-        if not name_raw:
-            continue
 
         # Poids : COL_COUL_MAX < x < COL_POIDS_MAX
         weight = None
@@ -270,6 +274,7 @@ def _parse_name_level(raw: str) -> tuple:
         "ALZIARY Benoit (C)"         → ("ALZIARY",  "Benoit",          "C")
         "DE ROY Hubert-arnaud (BPA)" → ("DE ROY",   "Hubert-arnaud",   "BPA")
     """
+    raw = _fix_encoding(raw)
     raw = re.sub(r'[◆♦●◉]', '', raw).strip()
 
     level = None
