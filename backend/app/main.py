@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from app.database import Base, engine
 from app import models  # noqa: F401 — enregistre les modèles auprès de SQLAlchemy
 from app.services.usb_watcher import start_usb_watcher
+from app.routers import users
 
 logging.basicConfig(
     level=logging.INFO,
@@ -10,6 +11,8 @@ logging.basicConfig(
 )
 
 app = FastAPI(title="SkyDive Media Hub", version="0.1.0")
+
+app.include_router(users.router)
 
 
 @app.on_event("startup")
