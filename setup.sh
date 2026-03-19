@@ -183,8 +183,7 @@ UDEV_SCRIPT
 sudo chmod +x /usr/local/bin/skydive-camera.sh
 
 sudo tee /etc/udev/rules.d/99-skydive-camera.rules > /dev/null <<'UDEV_RULE'
-ACTION=="bind", SUBSYSTEM=="usb", DEVTYPE=="usb_device", ENV{ID_GPHOTO2}=="1", \
-RUN+="/usr/local/bin/skydive-camera.sh"
+ACTION=="bind", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ENV{ID_GPHOTO2}=="1", RUN+="/usr/local/bin/skydive-camera.sh"
 UDEV_RULE
 
 sudo udevadm control --reload-rules
