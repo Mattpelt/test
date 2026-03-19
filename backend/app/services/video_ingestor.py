@@ -78,7 +78,7 @@ def _extract_insv_serial(mount_path: str) -> str | None:
     """
     Extrait le numéro de série unique depuis les métadonnées binaires d'un fichier .insv.
     Le serial Insta360 (ex: IAHEA25107V6YG) apparaît dans les 100 derniers Ko du fichier,
-    juste avant le nom du modèle 'Insta360'.
+    dans les 50 octets qui précèdent la chaîne 'Insta360'.
     """
     for root, _, files in os.walk(mount_path):
         for file in files:
@@ -88,11 +88,17 @@ def _extract_insv_serial(mount_path: str) -> str | None:
                     with open(path, "rb") as f:
                         f.seek(-100_000, 2)
                         data = f.read()
-                    match = re.search(rb"([A-Z][A-Z0-9]{9,19})\x00+Insta360", data)
-                    if match:
-                        return match.group(1).decode("ascii")
-                except Exception:
-                    pass
+                    pos = data.find(b"Insta360")
+                    if pos > 10:
+                        prefix = data[max(0, pos - 50): pos]
+                        match = re.search(rb"([A-Z][A-Z0-9]{9,19})", prefix)
+                        if match:
+                            serial = match.group(1).decode("ascii")
+                            logger.info(f"Serial .insv extrait : {serial}")
+                            return serial
+                    logger.warning(f"Chaîne 'Insta360' non trouvée dans {file}")
+                except Exception as e:
+                    logger.warning(f"Erreur lecture métadonnées {file} : {e}")
     return None
 
 
