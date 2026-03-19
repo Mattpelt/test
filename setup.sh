@@ -176,9 +176,12 @@ step "7/8 — Règle udev (détection caméra USB)"
 
 sudo tee /usr/local/bin/skydive-camera.sh > /dev/null <<'UDEV_SCRIPT'
 #!/bin/bash
-curl -s -X POST http://localhost:8000/internal/camera-connected \
+LOG=/tmp/skydive-camera.log
+echo "[$(date)] udev event: serial=$ID_SERIAL_SHORT vendor=$ID_VENDOR_ID" >> "$LOG"
+/usr/bin/curl -s -X POST http://127.0.0.1:8000/internal/camera-connected \
   -H "Content-Type: application/json" \
-  -d "{\"serial\": \"$ID_SERIAL_SHORT\", \"mtp\": true, \"vendor_id\": \"$ID_VENDOR_ID\"}"
+  -d "{\"serial\": \"$ID_SERIAL_SHORT\", \"mtp\": true, \"vendor_id\": \"$ID_VENDOR_ID\"}" >> "$LOG" 2>&1
+echo "[$(date)] curl exit code: $?" >> "$LOG"
 UDEV_SCRIPT
 sudo chmod +x /usr/local/bin/skydive-camera.sh
 
