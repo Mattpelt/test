@@ -194,7 +194,7 @@ log "Règle udev configurée"
 # ÉTAPE 8 — Démarrage Docker Compose
 # ==============================================================
 step "8/8 — Démarrage de l'application"
-sudo docker compose up --build -d
+sudo docker compose -f "$PROJECT_DIR/docker-compose.yml" up --build -d
 log "Application démarrée"
 
 # ==============================================================
@@ -204,9 +204,9 @@ echo ""
 step "Vérification"
 sleep 4
 
-if sudo docker compose ps | grep -q "running"; then
+if sudo docker compose -f "$PROJECT_DIR/docker-compose.yml" ps | grep -q "running"; then
     log "Containers actifs :"
-    sudo docker compose ps
+    sudo docker compose -f "$PROJECT_DIR/docker-compose.yml" ps
     LOCAL_IP=$(hostname -I | awk '{print $1}')
     echo ""
     echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -216,13 +216,13 @@ if sudo docker compose ps | grep -q "running"; then
     echo -e "  API        : ${CYAN}http://${LOCAL_IP}:8000${NC}"
     echo -e "  Swagger UI : ${CYAN}http://${LOCAL_IP}:8000/docs${NC}"
     echo ""
-    echo -e "  Commandes utiles :"
-    echo -e "    ${YELLOW}docker compose logs -f backend${NC}    # logs en direct"
-    echo -e "    ${YELLOW}docker compose restart backend${NC}    # redémarrer le backend"
-    echo -e "    ${YELLOW}git pull && docker compose up --build -d${NC}  # mise à jour"
+    echo -e "  Commandes utiles (depuis ~/skydivemediahub) :"
+    echo -e "    ${YELLOW}sudo docker compose logs -f backend${NC}          # logs en direct"
+    echo -e "    ${YELLOW}sudo docker compose restart backend${NC}          # redémarrer le backend"
+    echo -e "    ${YELLOW}git pull && sudo docker compose up --build -d${NC}  # mise à jour"
     echo ""
     echo -e "  Projet : ${PROJECT_DIR}"
     echo ""
 else
-    error "Un ou plusieurs containers ne sont pas actifs. Vérifiez avec : sudo docker compose logs"
+    error "Un ou plusieurs containers ne sont pas actifs. Vérifiez avec : sudo docker compose -f $PROJECT_DIR/docker-compose.yml logs"
 fi
