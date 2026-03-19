@@ -85,21 +85,39 @@ def _find_videos(mount_path: str) -> list[Path]:
 
 
 def ingest_device(device_node: str, serial: str, db: Session) -> None:
-    """Ingestion via mount (SD card / caméra mass storage)."""
+    """
+    Ingestion via USB Mass Storage.
+    device_node peut être :
+      - un répertoire (/mnt/camera_import) : déjà monté par l'hôte via udev
+      - un block device (/dev/sdb1)        : monté par nos soins dans le container
+    """
     user = _find_user(serial, db)
     if not user:
         return
 
     retention_days, storage_path = _get_settings(db)
-    mount_point = tempfile.mkdtemp(prefix="camera_")
+
+    # Cas 1 : l'hôte a déjà monté le périphérique (chemin partagé via volume Docker)
+    if os.path.isdir(device_node):
+        mount_point = device_node
+        own_mount = False
+        logger.info(f"Répertoire pré-monté par l'hôte : {mount_point}")
+    # Cas 2 : block device — on monte nous-mêmes
+    else:
+        mount_point = tempfile.mkdtemp(prefix="camera_")
+        own_mount = True
+        try:
+            subprocess.run(
+                ["mount", "-o", "ro", device_node, mount_point],
+                check=True, timeout=15,
+            )
+            logger.info(f"Monté : {device_node} → {mount_point}")
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Impossible de monter {device_node} : {e}")
+            os.rmdir(mount_point)
+            return
 
     try:
-        subprocess.run(
-            ["mount", "-o", "ro", device_node, mount_point],
-            check=True, timeout=15,
-        )
-        logger.info(f"Monté : {device_node} → {mount_point}")
-
         videos = _find_videos(mount_point)
         logger.info(f"{len(videos)} vidéo(s) trouvée(s)")
 
@@ -128,14 +146,16 @@ def ingest_device(device_node: str, serial: str, db: Session) -> None:
             f"{ingested} ingérée(s), {skipped} ignorée(s)."
         )
 
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Impossible de monter {device_node} : {e}")
     except Exception as e:
         db.rollback()
         logger.error(f"Erreur ingestion block : {e}")
     finally:
-        subprocess.run(["umount", mount_point], timeout=10)
-        os.rmdir(mount_point)
+        if own_mount:
+            subprocess.run(["umount", mount_point], timeout=10, check=False)
+            os.rmdir(mount_point)
+        else:
+            # Démonte le point de montage partagé pour libérer la caméra
+            subprocess.run(["umount", mount_point], timeout=10, check=False)
 
 
 # ---------------------------------------------------------------------------

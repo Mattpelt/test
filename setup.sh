@@ -174,11 +174,15 @@ fi
 # ==============================================================
 step "7/8 — Règle udev (détection caméra USB)"
 
+# Créer le point de montage pour les caméras USB Mass Storage
+sudo mkdir -p /mnt/camera_import
+
+# Script pour caméras MTP/gphoto2 (Insta360 MTP, Sony, etc.)
 sudo tee /usr/local/bin/skydive-camera.sh > /dev/null <<'UDEV_SCRIPT'
 #!/bin/bash
-# Lance le curl dans une unité systemd indépendante pour échapper au timeout udev
+# Caméras MTP/PTP (gphoto2) — lance curl via systemd pour échapper au timeout udev
 LOG=/tmp/skydive-camera.log
-echo "[$(date)] udev trigger: serial=$ID_SERIAL_SHORT vendor=$ID_VENDOR_ID" >> "$LOG"
+echo "[$(date)] udev MTP trigger: serial=$ID_SERIAL_SHORT vendor=$ID_VENDOR_ID" >> "$LOG"
 /usr/bin/systemd-run --no-block \
   /usr/bin/curl -s -X POST http://127.0.0.1:8000/internal/camera-connected \
   -H "Content-Type: application/json" \
@@ -186,12 +190,32 @@ echo "[$(date)] udev trigger: serial=$ID_SERIAL_SHORT vendor=$ID_VENDOR_ID" >> "
 UDEV_SCRIPT
 sudo chmod +x /usr/local/bin/skydive-camera.sh
 
+# Script pour caméras USB Mass Storage (Insta360, etc.)
+sudo tee /usr/local/bin/skydive-storage.sh > /dev/null <<'UDEV_SCRIPT'
+#!/bin/bash
+# Caméras USB Mass Storage — monte le périphérique puis appelle l'API
+LOG=/tmp/skydive-camera.log
+MOUNT_POINT=/mnt/camera_import
+SERIAL="$ID_SERIAL_SHORT"
+DEVNAME_VAR="$DEVNAME"
+echo "[$(date)] udev storage trigger: serial=$SERIAL device=$DEVNAME_VAR" >> "$LOG"
+/usr/bin/mount "$DEVNAME_VAR" "$MOUNT_POINT" >> "$LOG" 2>&1 && \
+/usr/bin/systemd-run --no-block \
+  /usr/bin/curl -s -X POST http://127.0.0.1:8000/internal/camera-connected \
+  -H "Content-Type: application/json" \
+  -d "{\"serial\": \"$SERIAL\", \"mtp\": false, \"device_node\": \"$MOUNT_POINT\"}" >> "$LOG" 2>&1
+UDEV_SCRIPT
+sudo chmod +x /usr/local/bin/skydive-storage.sh
+
 sudo tee /etc/udev/rules.d/99-skydive-camera.rules > /dev/null <<'UDEV_RULE'
+# Caméras MTP/PTP (GoPro via gphoto2, Sony, etc.)
 ACTION=="bind", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ENV{ID_GPHOTO2}=="1", RUN+="/usr/local/bin/skydive-camera.sh"
+# Caméras USB Mass Storage (Insta360, etc.)
+ACTION=="add", SUBSYSTEM=="block", ENV{ID_BUS}=="usb", ENV{DEVTYPE}=="partition", RUN+="/usr/local/bin/skydive-storage.sh"
 UDEV_RULE
 
 sudo udevadm control --reload-rules
-log "Règle udev configurée"
+log "Règles udev configurées (MTP + USB Mass Storage)"
 
 # ==============================================================
 # ÉTAPE 8 — Démarrage Docker Compose
