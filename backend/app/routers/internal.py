@@ -1,9 +1,9 @@
 import logging
-from fastapi import APIRouter, Depends
+import threading
+from fastapi import APIRouter
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
 
-from app.database import get_db
+from app.database import SessionLocal
 from app.services.video_ingestor import ingest_device, ingest_mtp_device
 
 router = APIRouter(prefix="/internal", tags=["Interne"])
@@ -15,21 +15,33 @@ class CameraEvent(BaseModel):
     serial: str
     device_node: str | None = None   # présent pour les block devices (SD cards)
     mtp: bool = False                # True = caméra MTP/PTP, False = block device
+    vendor_id: str | None = None
+
+
+def _run_in_background(target, **kwargs):
+    """Lance l'ingestion dans un thread séparé avec sa propre session DB."""
+    def worker():
+        db = SessionLocal()
+        try:
+            target(**kwargs, db=db)
+        finally:
+            db.close()
+    threading.Thread(target=worker, daemon=True).start()
 
 
 @router.post("/camera-connected")
-def camera_connected(event: CameraEvent, db: Session = Depends(get_db)):
+def camera_connected(event: CameraEvent):
     """
     Appelé par la règle udev de l'hôte quand une caméra est branchée.
-    Déclenche l'ingestion MTP ou block selon le type de device.
+    Déclenche l'ingestion en arrière-plan (non bloquant).
     """
     logger.info(f"Événement caméra reçu — serial: {event.serial}, mtp: {event.mtp}")
 
     if event.mtp:
-        ingest_mtp_device(serial=event.serial, db=db)
+        _run_in_background(ingest_mtp_device, serial=event.serial)
     elif event.device_node:
-        ingest_device(device_node=event.device_node, serial=event.serial, db=db)
+        _run_in_background(ingest_device, device_node=event.device_node, serial=event.serial)
     else:
         logger.warning("Événement caméra reçu sans device_node ni mtp=True — ignoré.")
 
-    return {"status": "ok"}
+    return {"status": "ingestion démarrée"}

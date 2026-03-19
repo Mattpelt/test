@@ -121,10 +121,11 @@ def ingest_device(device_node: str, serial: str, db: Session) -> None:
         videos = _find_videos(mount_point)
         logger.info(f"{len(videos)} vidéo(s) trouvée(s)")
 
+        total = len(videos)
         ingested = skipped = 0
         date_str = datetime.now().strftime("%Y-%m-%d")
 
-        for video_file in videos:
+        for i, video_file in enumerate(videos, 1):
             dest_dir = Path(storage_path) / str(user.id) / date_str
             dest_dir.mkdir(parents=True, exist_ok=True)
             dest_path = dest_dir / video_file.name
@@ -133,17 +134,20 @@ def ingest_device(device_node: str, serial: str, db: Session) -> None:
                 skipped += 1
                 continue
 
+            size_mb = video_file.stat().st_size / 1_048_576
+            logger.info(f"[{i}/{total}] Copie : {video_file.name} ({size_mb:.0f} Mo)")
             shutil.copy2(video_file, dest_path)
             camera_ts = datetime.fromtimestamp(os.path.getmtime(video_file))
             _save_video_record(db, video_file.name, str(dest_path),
                                video_file.stat().st_size, camera_ts,
                                user.id, retention_days)
             ingested += 1
+            logger.info(f"[{i}/{total}] OK — {ingested} ingérée(s), {skipped} ignorée(s) jusqu'ici")
 
         db.commit()
         logger.info(
-            f"{user.first_name} {user.last_name} — "
-            f"{ingested} ingérée(s), {skipped} ignorée(s)."
+            f"Ingestion terminée — {user.first_name} {user.last_name} : "
+            f"{ingested} ingérée(s), {skipped} déjà présente(s)."
         )
 
     except Exception as e:
@@ -154,7 +158,6 @@ def ingest_device(device_node: str, serial: str, db: Session) -> None:
             subprocess.run(["umount", mount_point], timeout=10, check=False)
             os.rmdir(mount_point)
         else:
-            # Démonte le point de montage partagé pour libérer la caméra
             subprocess.run(["umount", mount_point], timeout=10, check=False)
 
 
