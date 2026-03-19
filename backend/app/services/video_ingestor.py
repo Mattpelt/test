@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -73,6 +74,28 @@ def _save_video_record(
 # Path 1 : block device (SD card / mass storage)
 # ---------------------------------------------------------------------------
 
+def _extract_insv_serial(mount_path: str) -> str | None:
+    """
+    Extrait le numéro de série unique depuis les métadonnées binaires d'un fichier .insv.
+    Le serial Insta360 (ex: IAHEA25107V6YG) apparaît dans les 100 derniers Ko du fichier,
+    juste avant le nom du modèle 'Insta360'.
+    """
+    for root, _, files in os.walk(mount_path):
+        for file in files:
+            if file.lower().endswith(".insv"):
+                path = Path(root) / file
+                try:
+                    with open(path, "rb") as f:
+                        f.seek(-100_000, 2)
+                        data = f.read()
+                    match = re.search(rb"([A-Z][A-Z0-9]{9,19})\x00+Insta360", data)
+                    if match:
+                        return match.group(1).decode("ascii")
+                except Exception:
+                    pass
+    return None
+
+
 def _find_videos(mount_path: str) -> list[Path]:
     """Parcourt le périphérique monté et retourne tous les fichiers vidéo."""
     videos = []
@@ -118,6 +141,15 @@ def ingest_device(device_node: str, serial: str, db: Session) -> None:
             return
 
     try:
+        # Tentative d'extraction du serial réel depuis les métadonnées .insv
+        real_serial = _extract_insv_serial(mount_point)
+        if real_serial and real_serial != serial:
+            logger.info(f"Serial réel extrait des métadonnées : {real_serial} (USB : {serial})")
+            real_user = _find_user(real_serial, db)
+            if real_user:
+                user = real_user
+                logger.info(f"Utilisateur trouvé via serial .insv : {user.first_name} {user.last_name}")
+
         videos = _find_videos(mount_point)
         logger.info(f"{len(videos)} vidéo(s) trouvée(s)")
 
