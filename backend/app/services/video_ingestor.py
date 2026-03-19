@@ -113,19 +113,15 @@ def ingest_device(device_node: str, serial: str, db: Session) -> None:
     device_node peut être :
       - un répertoire (/mnt/camera_import) : déjà monté par l'hôte via udev
       - un block device (/dev/sdb1)        : monté par nos soins dans le container
+    Ordre : montage → extraction serial réel → lookup utilisateur → copie.
     """
-    user = _find_user(serial, db)
-    if not user:
-        return
-
     retention_days, storage_path = _get_settings(db)
 
-    # Cas 1 : l'hôte a déjà monté le périphérique (chemin partagé via volume Docker)
+    # Montage
     if os.path.isdir(device_node):
         mount_point = device_node
         own_mount = False
         logger.info(f"Répertoire pré-monté par l'hôte : {mount_point}")
-    # Cas 2 : block device — on monte nous-mêmes
     else:
         mount_point = tempfile.mkdtemp(prefix="camera_")
         own_mount = True
@@ -141,14 +137,17 @@ def ingest_device(device_node: str, serial: str, db: Session) -> None:
             return
 
     try:
-        # Tentative d'extraction du serial réel depuis les métadonnées .insv
+        # Extraction du serial réel depuis les métadonnées .insv (Insta360)
+        # Doit précéder le lookup utilisateur car le serial USB peut être générique
         real_serial = _extract_insv_serial(mount_point)
-        if real_serial and real_serial != serial:
-            logger.info(f"Serial réel extrait des métadonnées : {real_serial} (USB : {serial})")
-            real_user = _find_user(real_serial, db)
-            if real_user:
-                user = real_user
-                logger.info(f"Utilisateur trouvé via serial .insv : {user.first_name} {user.last_name}")
+        if real_serial:
+            logger.info(f"Serial extrait des métadonnées : {real_serial} (USB : {serial})")
+            serial = real_serial
+
+        user = _find_user(serial, db)
+        if not user:
+            logger.warning(f"Aucun compte associé au serial {serial} — onboarding requis.")
+            return
 
         videos = _find_videos(mount_point)
         logger.info(f"{len(videos)} vidéo(s) trouvée(s)")
