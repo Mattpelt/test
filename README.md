@@ -5,6 +5,20 @@ Version 0.7 — Mars 2026
 ========================================================
 
 --------------------------------------------------------
+DÉPLOIEMENT
+--------------------------------------------------------
+Installation automatique sur Ubuntu vierge (en SSH) :
+
+  sudo apt install -y git && \
+  git clone https://github.com/Mattpelt/test ~/skydivemediahub && \
+  bash ~/skydivemediahub/setup.sh
+
+Le script installe Docker, clone le dépôt, génère le .env,
+configure la règle udev et démarre l'application.
+
+Documentation complète : voir DEPLOY.md
+
+--------------------------------------------------------
 HISTORIQUE DES VERSIONS
 --------------------------------------------------------
 v0.1 — Version initiale
