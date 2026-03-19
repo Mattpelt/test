@@ -26,6 +26,7 @@ services:
     volumes:
       - ./backend:/app                      # rechargement du code sans rebuild
       - ${VIDEO_STORAGE_PATH}:/mnt/videos   # HDD(s) SATA pour les vidéos
+      - /dev/bus/usb:/dev/bus/usb           # périphériques USB branchés après démarrage
     ports:
       - "8000:8000"
     depends_on:
