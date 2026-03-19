@@ -26,8 +26,7 @@ services:
     volumes:
       - ./backend:/app                      # rechargement du code sans rebuild
       - ${VIDEO_STORAGE_PATH}:/mnt/videos   # HDD(s) SATA pour les vidéos
-      - /dev/bus/usb:/dev/bus/usb           # périphériques USB branchés après démarrage
-      - /mnt/camera_import:/mnt/camera_import  # point de montage USB mass storage (monté par l'hôte)
+      - /dev:/dev                           # accès complet aux périphériques USB (MTP + Mass Storage)
     ports:
       - "8000:8000"
     depends_on:
