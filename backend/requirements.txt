@@ -18,6 +18,9 @@ gphoto2==2.5.0
 # HTTP client (Open GoPro API via USB NCM)
 requests==2.32.3
 
+# Tâches planifiées (nettoyage rétention)
+apscheduler==3.10.4
+
 # Variables d'environnement
 python-dotenv==1.0.1
 
