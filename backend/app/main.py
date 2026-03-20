@@ -1,10 +1,12 @@
 import logging
 from fastapi import FastAPI
 from sqlalchemy import text
+from apscheduler.schedulers.background import BackgroundScheduler
 from app.database import Base, engine, SessionLocal
 from app import models  # noqa: F401 — enregistre les modèles auprès de SQLAlchemy
 from app.models.settings import Settings
 from app.services.usb_watcher import start_usb_watcher
+from app.services.gmail_poller import check_new_rots
 from app.routers import users, rots, videos, internal
 
 logging.basicConfig(
@@ -29,6 +31,7 @@ def on_startup():
     _migrate()
     _init_settings()
     start_usb_watcher()
+    _start_scheduler()
 
 
 def _migrate():
@@ -36,6 +39,8 @@ def _migrate():
     migrations = [
         "ALTER TABLE settings ADD COLUMN IF NOT EXISTS jump_target_delta_min INTEGER DEFAULT 30",
         "ALTER TABLE settings ADD COLUMN IF NOT EXISTS jump_window_hours INTEGER DEFAULT 2",
+        "ALTER TABLE settings ADD COLUMN IF NOT EXISTS gmail_address VARCHAR DEFAULT ''",
+        "ALTER TABLE settings ADD COLUMN IF NOT EXISTS gmail_sender_filter VARCHAR DEFAULT ''",
         "ALTER TABLE videos ADD COLUMN IF NOT EXISTS rot_id INTEGER REFERENCES rots(id)",
         "ALTER TABLE videos ADD COLUMN IF NOT EXISTS group_id INTEGER",
     ]
@@ -58,6 +63,13 @@ def _init_settings():
             logger.info("Settings initialisés avec les valeurs par défaut.")
     finally:
         db.close()
+
+
+def _start_scheduler():
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(check_new_rots, "interval", minutes=1, id="gmail_poll")
+    scheduler.start()
+    logger.info("Gmail poller démarré — vérification toutes les 60s.")
 
 
 @app.get("/health")

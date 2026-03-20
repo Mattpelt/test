@@ -7,58 +7,11 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.rot import Rot
-from app.models.rot_participant import RotParticipant
-from app.models.user import User
 from app.schemas.rot import RotInput, RotResponse
 from app.services.pdf_parser import parse_afifly_pdf
+from app.services.rot_service import persist_rot
 
 router = APIRouter(prefix="/rots", tags=["Rotations"])
-
-
-def _persist_rot(data: dict, db: Session, source_pdf_path: str | None = None) -> Rot:
-    """
-    Persiste un rot et ses participants en base.
-    Tente de matcher chaque participant avec un compte utilisateur existant (via afifly_name).
-    """
-    rot = Rot(
-        rot_number         = data["rot_number"],
-        day_number         = data.get("day_number"),
-        rot_date           = data["rot_date"],
-        rot_time           = data["rot_time"],
-        plane_registration = data.get("plane_registration"),
-        pilot              = data.get("pilot"),
-        chef_avion         = data.get("chef_avion"),
-        source_pdf_path    = source_pdf_path,
-        parse_status       = "OK",
-    )
-    db.add(rot)
-    db.flush()
-
-    matched = 0
-    for p in data.get("participants", []):
-        user = (
-            db.query(User)
-            .filter(User.afifly_name == p["afifly_name"], User.is_active == True)
-            .first()
-        )
-        if user:
-            matched += 1
-        db.add(RotParticipant(
-            rot_id      = rot.id,
-            user_id     = user.id if user else None,
-            afifly_name = p["afifly_name"],
-            level       = p.get("level"),
-            weight      = p.get("weight"),
-            jump_type   = p.get("jump_type"),
-            group_id    = p.get("group_id", 1),
-        ))
-
-    db.commit()
-    db.refresh(rot)
-
-    total = len(data.get("participants", []))
-    print(f"Rot n°{rot.rot_number} enregistré — {total} participants, {matched} matchés.")
-    return rot
 
 
 @router.post("/debug-pdf")
@@ -200,7 +153,7 @@ def create_rot_from_pdf(file: UploadFile = File(...), db: Session = Depends(get_
             detail=f"Le rot n°{data['rot_number']} du {data['rot_date']} existe déjà.",
         )
 
-    rot = _persist_rot(data, db, source_pdf_path=tmp_path)
+    rot = persist_rot(data, db, source_pdf_path=tmp_path)
     return rot
 
 
@@ -243,7 +196,7 @@ def create_rot_from_json(payload: RotInput, db: Session = Depends(get_db)):
             for p in payload.participants
         ],
     }
-    return _persist_rot(data, db)
+    return persist_rot(data, db)
 
 
 @router.get("", response_model=list[RotResponse])

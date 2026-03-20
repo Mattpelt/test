@@ -12,4 +12,6 @@ class Settings(Base):
     jump_target_delta_min   = Column(Integer, default=30)           # délai attendu rot_time → vidéo (minutes)
     jump_window_hours       = Column(Integer, default=2)            # fenêtre max rot_time → vidéo (heures)
     video_storage_path      = Column(String, default="/mnt/videos") # chemin de stockage des vidéos
+    gmail_address           = Column(String, default="")            # compte Gmail à surveiller
+    gmail_sender_filter     = Column(String, default="")            # expéditeur autorisé (ex: afifly)
     updated_at              = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
