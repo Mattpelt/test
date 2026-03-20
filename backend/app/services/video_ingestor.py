@@ -220,17 +220,28 @@ def ingest_gopro_http(serial: str, db: Session) -> None:
     retention_days, storage_path = _get_settings(db)
 
     # Laisser le temps à l'interface USB NCM d'être configurée
-    time.sleep(3)
+    time.sleep(5)
 
-    try:
-        resp = requests.get(GOPRO_MEDIA_LIST, timeout=10)
-        resp.raise_for_status()
-    except requests.RequestException as e:
-        logger.error(f"GoPro HTTP — impossible d'accéder à media/list : {e}")
+    # La GoPro peut retourner une liste vide si le serveur média n'est pas encore prêt
+    # → on retente jusqu'à 5 fois avec 5s d'intervalle
+    media_data = None
+    for attempt in range(1, 6):
+        try:
+            resp = requests.get(GOPRO_MEDIA_LIST, timeout=10)
+            resp.raise_for_status()
+            media_data = resp.json()
+            logger.info(f"GoPro media/list (tentative {attempt}) : {media_data}")
+            if media_data.get("media"):
+                break
+            logger.info(f"GoPro media/list vide — nouvel essai dans 5s ({attempt}/5)")
+            time.sleep(5)
+        except requests.RequestException as e:
+            logger.warning(f"GoPro HTTP tentative {attempt}/5 — erreur : {e}")
+            time.sleep(5)
+
+    if not media_data:
+        logger.error("GoPro HTTP — aucune réponse après 5 tentatives")
         return
-
-    media_data = resp.json()
-    logger.info(f"GoPro media/list réponse brute : {media_data}")
     # Format: {"id": "...", "media": [{"d": "100GOPRO", "fs": [{"n": "GX010488.MP4", "s": "...", "cre": timestamp}]}]}
     all_files: list[tuple[str, str, int, int]] = []  # (dossier, nom, taille, cre)
     for entry in media_data.get("media", []):
