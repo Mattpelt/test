@@ -1,0 +1,109 @@
+{
+  "name": "gmail PDF Afifly poster",
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cede4986-2850-4b1c-b4ec-2ca775965e42",
+              "leftValue": "={{ Object.keys($binary).length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": "={{ false }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [208, 0],
+      "id": "3f586878-5edc-4518-a69c-71fc885aa7a2",
+      "name": "Filter"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first();\nconst binaryData = item.binary || {};\nconst pdfKeys = Object.keys(binaryData).filter(key => {\n  const file = binaryData[key];\n  return file.fileName?.toLowerCase().endsWith('.pdf') \n      || file.mimeType === 'application/pdf';\n});\n\nreturn pdfKeys.map(key => ({ json: {}, binary: { file: binaryData[key] } }));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [416, 0],
+      "id": "ef01850e-68dd-4c9b-bcaa-eaee86ada1ba",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "downloadAttachments": true,
+        "options": {
+          "trackLastMessageId": true
+        }
+      },
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2.1,
+      "position": [0, 0],
+      "id": "a6fd1a94-f0bd-4324-b655-50a0da77acef",
+      "name": "Email Trigger (IMAP)",
+      "credentials": {
+        "imap": {
+          "id": "0Leeuf6zfE42E64g",
+          "name": "IMAP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://backend:8000/rots",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "file"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [624, 0],
+      "id": "f8248689-5606-4f66-b94d-3fcb5bf4c57d",
+      "name": "HTTP Request"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Filter": {
+      "main": [[{"node": "Code in JavaScript", "type": "main", "index": 0}]]
+    },
+    "Email Trigger (IMAP)": {
+      "main": [[{"node": "Filter", "type": "main", "index": 0}]]
+    },
+    "Code in JavaScript": {
+      "main": [[{"node": "HTTP Request", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}
