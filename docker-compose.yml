@@ -33,6 +33,16 @@ services:
       db:
         condition: service_healthy          # attend que PostgreSQL soit prêt
 
+  frontend:
+    build: ./frontend
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ${VIDEO_STORAGE_PATH}:/mnt/videos:ro   # vidéos en lecture seule (X-Accel-Redirect)
+    depends_on:
+      - backend
+
   n8n:
     image: n8nio/n8n
     restart: always
