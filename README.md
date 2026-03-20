@@ -143,7 +143,7 @@ F08 — Une confirmation visuelle sur l'écran du pupitre
 4.3 RÉCUPÉRATION AUTONOME DES PDFS AFIFLY
 ------------------------------------------
 F09 — Le système surveille en autonomie une boîte Gmail
-      dédiée par polling régulier (via Gmail API / OAuth2).
+      dédiée via n8n (Email Trigger IMAP).
       À chaque nouveau PDF reçu en pièce jointe, il le
       récupère et le traite automatiquement, sans
       intervention humaine. Avec ~30 rotations/jour,
@@ -269,31 +269,33 @@ F22 — Le système supprime automatiquement les vidéos dont
 --------------------------------------------------------
 Tous les points ouverts initiaux sont fermés.
 
-POINTS OUVERTS SESSION 2 :
+ÉTAT D'AVANCEMENT :
 
-PO-7 : Ingestion GoPro via HTTP (Open GoPro API)
-  L'API HTTP de la GoPro est confirmée fonctionnelle
-  (172.26.166.51:8080/gopro/media/list répond).
-  Il faut implémenter le téléchargement HTTP dans
-  video_ingestor.py et tester avec des vidéos réelles
-  sur la caméra.
+PO-7  ✓ Ingestion GoPro via HTTP (Open GoPro API) — VALIDÉ
+        ingest_gopro_http() implémenté et testé sur hardware réel.
+        Note : seules les vidéos filmées par la caméra sont visibles
+        via l'API (pas les fichiers copiés manuellement sur la SD).
 
-PO-8 : Règle udev sur l'hôte Ubuntu
-  La détection automatique au branchement nécessite
-  une règle udev sur l'hôte (pas dans Docker).
-  Voir section 8.7 pour l'architecture cible.
+PO-8  ✓ Règle udev sur l'hôte Ubuntu — VALIDÉ
+        Scripts skydive-camera.sh + skydive-storage.sh configurés
+        via setup.sh. Détection automatique MTP + Mass Storage.
 
-PO-9 : Validation ingestion gphoto2 sur bare-metal
-  gphoto2 détecte correctement la caméra dans le
-  container mais le transfert PTP échoue en USB/IP
-  (latence réseau trop élevée pour le protocole PTP).
-  À valider sur le vrai hardware bare-metal.
+PO-9  ✓ Ingestion gphoto2 (MTP) — VALIDÉ sur bare-metal
+        ingest_mtp_device() fonctionnel.
 
-PO-10 : Moteur de matching vidéo ↔ rot (F11/F12)
-PO-11 : Gmail polling + ingestion PDF auto (F09)
-PO-12 : Notifications email (F13)
-PO-13 : Nettoyage rétention automatique (F22)
-PO-14 : Frontend (hors périmètre session actuelle)
+PO-10 ✓ Moteur de matching vidéo ↔ rot — VALIDÉ
+        matcher.py : scoring par proximité temporelle.
+        Paramètres configurables : jump_target_delta_min (défaut 30min),
+        jump_window_hours (défaut 2h). Testé en conditions réelles.
+
+PO-11 ✓ Ingestion automatique PDF Afifly via email — VALIDÉ
+        Solution retenue : n8n (IMAP trigger → POST /rots).
+        Workflow versionné dans n8n/workflows/gmail_pdf_afifly.json.
+        Importé automatiquement au démarrage de n8n.
+
+PO-12 : Notifications email (F13) — À FAIRE
+PO-13 : Nettoyage rétention automatique (F22) — À FAIRE
+PO-14 : Frontend — À FAIRE
 
 
 ========================================================
@@ -352,12 +354,11 @@ Swagger UI       : http://192.168.1.97:8000/docs
 Langage      : Python 3.11+
 Framework    : FastAPI (API REST)
 ORM          : SQLAlchemy
-Tâches fond  : APScheduler (polling Gmail, nettoyage rétention)
 PDF parsing  : pdfplumber (extraction contenu + géométrie)
 USB detect   : udev HOST → HTTP (voir 8.7)
 MTP/PTP      : gphoto2 (caméras non-GoPro)
 GoPro        : Open GoPro HTTP API (voir 8.7)
-Email        : Gmail API + OAuth2
+Email/PDF    : n8n (IMAP trigger → POST /rots) — voir 8.10
 
 
 8.4 BASE DE DONNÉES
@@ -449,9 +450,10 @@ TABLE : settings (une seule ligne, initialisée au démarrage)
   DELETE /users/{id}               — désactiver (soft delete)
 
 /rots
-  POST   /rots/debug-pdf           — diagnostic PDF brut (à conserver)
+  POST   /rots/debug-pdf           — diagnostic PDF brut (outil de dev)
   POST   /rots/parse-preview       — parser PDF sans sauvegarder
-  POST   /rots                     — parser PDF et sauvegarder en DB
+  POST   /rots                     — parser PDF et upsert en DB (utilisé par n8n)
+  POST   /rots/json                — créer un rot depuis JSON (sans PDF)
   GET    /rots                     — lister toutes les rotations
   GET    /rots/{id}                — détail d'une rotation
 
@@ -460,6 +462,10 @@ TABLE : settings (une seule ligne, initialisée au démarrage)
   GET    /videos/user/{user_id}    — vidéos d'un sautant
   GET    /videos/{id}              — détail d'une vidéo
   DELETE /videos/{id}              — supprimer une vidéo
+
+/settings
+  GET    /settings                 — lire la configuration
+  PATCH  /settings                 — modifier la configuration
 
 /internal
   POST   /internal/camera-connected — déclencheur d'ingestion
@@ -596,6 +602,14 @@ VALIDATION SUR PDFs RÉELS :
                        libgphoto2-dev, gphoto2
     Packages Python  : voir requirements.txt
 
+  service : n8n
+    Image     : n8nio/n8n (dernière version stable)
+    Port      : 5678
+    Volume    : n8n_data (credentials + historique exécutions)
+    Volume    : ./n8n/workflows (workflows versionnés)
+    Import    : gmail_pdf_afifly.json importé au démarrage
+    Auth      : basic auth (N8N_USER / N8N_PASSWORD)
+
   DÉMARRAGE :
     docker compose up --build -d
 
@@ -603,6 +617,7 @@ VALIDATION SUR PDFs RÉELS :
     DATABASE_URL=postgresql://...
     POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB
     VIDEO_STORAGE_PATH=/mnt/videos
+    N8N_USER, N8N_PASSWORD
 
 
 8.10 FLEXIBILITÉ MATÉRIELLE
