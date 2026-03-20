@@ -222,6 +222,15 @@ def ingest_gopro_http(serial: str, db: Session) -> None:
     # Laisser le temps à l'interface USB NCM d'être configurée
     time.sleep(5)
 
+    # Activer le wired USB control mode (requis sur HERO11 pour accéder aux médias)
+    try:
+        r = requests.get(f"{GOPRO_BASE_URL}/gopro/camera/control/wired_usb?p=1", timeout=10)
+        logger.info(f"GoPro wired USB control : {r.status_code} {r.text}")
+    except requests.RequestException as e:
+        logger.warning(f"GoPro wired USB control — erreur : {e}")
+
+    time.sleep(2)
+
     # La GoPro peut retourner une liste vide si le serveur média n'est pas encore prêt
     # → on retente jusqu'à 5 fois avec 5s d'intervalle
     media_data = None
