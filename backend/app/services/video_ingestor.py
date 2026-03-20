@@ -231,13 +231,6 @@ def ingest_gopro_http(serial: str, db: Session) -> None:
 
     time.sleep(2)
 
-    # Diagnostic : état de la caméra
-    try:
-        r = requests.get(f"{GOPRO_BASE_URL}/gopro/camera/state", timeout=10)
-        logger.info(f"GoPro camera/state : {r.json()}")
-    except requests.RequestException as e:
-        logger.warning(f"GoPro camera/state — erreur : {e}")
-
     # La GoPro peut retourner une liste vide si le serveur média n'est pas encore prêt
     # → on retente jusqu'à 5 fois avec 5s d'intervalle
     media_data = None
@@ -246,7 +239,6 @@ def ingest_gopro_http(serial: str, db: Session) -> None:
             resp = requests.get(GOPRO_MEDIA_LIST, timeout=10)
             resp.raise_for_status()
             media_data = resp.json()
-            logger.info(f"GoPro media/list (tentative {attempt}) : {media_data}")
             if media_data.get("media"):
                 break
             logger.info(f"GoPro media/list vide — nouvel essai dans 5s ({attempt}/5)")
