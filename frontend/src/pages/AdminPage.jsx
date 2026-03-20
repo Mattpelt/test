@@ -1,4 +1,337 @@
-// TODO Sprint 3 — dashboard admin
+import { useEffect, useState } from 'react'
+import { useAuth } from '../context/AuthContext'
+import { api } from '../api/client'
+import styles from './AdminPage.module.css'
+
+const TABS = ['Sautants', 'Rotations', 'Paramètres']
+
 export default function AdminPage() {
-  return <div>Admin — en construction</div>
+  const { user, logout } = useAuth()
+  const [tab, setTab] = useState('Sautants')
+
+  return (
+    <div className={styles.page}>
+      <header className={styles.header}>
+        <span className={styles.headerTitle}>SkyDive Media Hub — Admin</span>
+        <div className={styles.headerRight}>
+          <span className={styles.userName}>{user.first_name} {user.last_name}</span>
+          <a href="/" className={styles.linkBtn}>Vue sautant</a>
+          <button className={styles.logoutBtn} onClick={logout}>Déconnexion</button>
+        </div>
+      </header>
+
+      <div className={styles.tabs}>
+        {TABS.map(t => (
+          <button
+            key={t}
+            className={`${styles.tab} ${tab === t ? styles.tabActive : ''}`}
+            onClick={() => setTab(t)}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+
+      <main className={styles.main}>
+        {tab === 'Sautants'    && <UsersTab />}
+        {tab === 'Rotations'   && <RotsTab />}
+        {tab === 'Paramètres'  && <SettingsTab />}
+      </main>
+    </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────
+   Onglet Sautants
+───────────────────────────────────────────────── */
+function UsersTab() {
+  const [users, setUsers] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+
+  async function load() {
+    setLoading(true)
+    try {
+      const { data } = await api.get('/users')
+      setUsers(data)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { load() }, [])
+
+  async function deactivate(id, name) {
+    if (!confirm(`Désactiver le compte de ${name} ?`)) return
+    await api.delete(`/users/${id}`)
+    load()
+  }
+
+  return (
+    <div className={styles.tabContent}>
+      <div className={styles.tabBar}>
+        <h2 className={styles.tabTitle}>Sautants ({users.length})</h2>
+        <button className={styles.primaryBtn} onClick={() => setShowForm(true)}>
+          + Nouveau sautant
+        </button>
+      </div>
+
+      {showForm && (
+        <CreateUserForm onSuccess={() => { setShowForm(false); load() }} onCancel={() => setShowForm(false)} />
+      )}
+
+      {loading ? (
+        <p className={styles.info}>Chargement…</p>
+      ) : (
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>Nom</th>
+              <th>Email</th>
+              <th>Nom Afifly</th>
+              <th>Caméras</th>
+              <th>Rôle</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.map(u => (
+              <tr key={u.id}>
+                <td>{u.first_name} {u.last_name}</td>
+                <td className={styles.muted}>{u.email}</td>
+                <td className={styles.muted}>{u.afifly_name ?? '—'}</td>
+                <td className={styles.muted}>{u.camera_serials.join(', ') || '—'}</td>
+                <td>
+                  <span className={u.is_admin ? styles.badgeAdmin : styles.badgeUser}>
+                    {u.is_admin ? 'Admin' : 'Sautant'}
+                  </span>
+                </td>
+                <td>
+                  <button
+                    className={styles.dangerBtn}
+                    onClick={() => deactivate(u.id, `${u.first_name} ${u.last_name}`)}
+                  >
+                    Désactiver
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  )
+}
+
+function CreateUserForm({ onSuccess, onCancel }) {
+  const [form, setForm] = useState({
+    first_name: '', last_name: '', email: '', password: '',
+    afifly_name: '', is_admin: false,
+  })
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  function set(field) {
+    return e => setForm(f => ({ ...f, [field]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }))
+  }
+
+  async function submit(e) {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+    try {
+      await api.post('/users', form)
+      onSuccess()
+    } catch (err) {
+      setError(err.response?.data?.detail ?? 'Erreur lors de la création.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <form className={styles.inlineForm} onSubmit={submit}>
+      <h3 className={styles.formTitle}>Nouveau sautant</h3>
+      <div className={styles.formGrid}>
+        <input className={styles.input} placeholder="Prénom *" value={form.first_name} onChange={set('first_name')} required />
+        <input className={styles.input} placeholder="Nom *" value={form.last_name} onChange={set('last_name')} required />
+        <input className={styles.input} placeholder="Email *" type="email" value={form.email} onChange={set('email')} required />
+        <input className={styles.input} placeholder="Mot de passe *" type="password" value={form.password} onChange={set('password')} required />
+        <input className={styles.input} placeholder="Nom Afifly (optionnel)" value={form.afifly_name} onChange={set('afifly_name')} />
+        <label className={styles.checkLabel}>
+          <input type="checkbox" checked={form.is_admin} onChange={set('is_admin')} />
+          Administrateur
+        </label>
+      </div>
+      {error && <p className={styles.error}>{error}</p>}
+      <div className={styles.formActions}>
+        <button type="submit" className={styles.primaryBtn} disabled={loading}>
+          {loading ? 'Création…' : 'Créer'}
+        </button>
+        <button type="button" className={styles.secondaryBtn} onClick={onCancel}>Annuler</button>
+      </div>
+    </form>
+  )
+}
+
+/* ─────────────────────────────────────────────────
+   Onglet Rotations
+───────────────────────────────────────────────── */
+function RotsTab() {
+  const [rots, setRots] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    api.get('/rots').then(({ data }) => setRots(data)).finally(() => setLoading(false))
+  }, [])
+
+  function formatDate(d) {
+    return new Date(d + 'T00:00:00').toLocaleDateString('fr-FR')
+  }
+
+  return (
+    <div className={styles.tabContent}>
+      <div className={styles.tabBar}>
+        <h2 className={styles.tabTitle}>Rotations ({rots.length})</h2>
+      </div>
+
+      {loading ? (
+        <p className={styles.info}>Chargement…</p>
+      ) : (
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>N°</th>
+              <th>Date</th>
+              <th>Heure</th>
+              <th>Avion</th>
+              <th>Pilote</th>
+              <th>Statut</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rots.map(rot => (
+              <tr key={rot.id}>
+                <td>#{rot.rot_number}</td>
+                <td>{formatDate(rot.rot_date)}</td>
+                <td>{rot.rot_time?.slice(0, 5)}</td>
+                <td className={styles.muted}>{rot.plane_registration ?? '—'}</td>
+                <td className={styles.muted}>{rot.pilot ?? '—'}</td>
+                <td>
+                  <span className={rot.parse_status === 'OK' ? styles.badgeOk : styles.badgeErr}>
+                    {rot.parse_status}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────
+   Onglet Paramètres
+───────────────────────────────────────────────── */
+function SettingsTab() {
+  const [settings, setSettings] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    api.get('/settings').then(({ data }) => setSettings(data)).finally(() => setLoading(false))
+  }, [])
+
+  function set(field) {
+    return e => setSettings(s => ({ ...s, [field]: Number(e.target.value) }))
+  }
+
+  async function save(e) {
+    e.preventDefault()
+    setSaving(true)
+    setSaved(false)
+    setError('')
+    try {
+      const { data } = await api.patch('/settings', settings)
+      setSettings(data)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    } catch {
+      setError('Erreur lors de la sauvegarde.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) return <p className={styles.info}>Chargement…</p>
+
+  return (
+    <div className={styles.tabContent}>
+      <div className={styles.tabBar}>
+        <h2 className={styles.tabTitle}>Paramètres</h2>
+      </div>
+
+      <form className={styles.settingsForm} onSubmit={save}>
+        <SettingField
+          label="Rétention des vidéos"
+          hint="Durée de conservation des vidéos après ingestion."
+          value={settings.retention_days}
+          unit="jours"
+          onChange={set('retention_days')}
+        />
+        <SettingField
+          label="Fenêtre de matching"
+          hint="Écart max entre l'horodatage vidéo et l'heure du rot pour un matching automatique."
+          value={settings.matching_window_minutes}
+          unit="minutes"
+          onChange={set('matching_window_minutes')}
+        />
+        <SettingField
+          label="Delta cible saut"
+          hint="Décalage horaire habituel entre le décollage et le saut."
+          value={settings.jump_target_delta_min}
+          unit="minutes"
+          onChange={set('jump_target_delta_min')}
+        />
+        <SettingField
+          label="Fenêtre de saut"
+          hint="Plage de temps autour du delta cible pour la détection du saut."
+          value={settings.jump_window_hours}
+          unit="heures"
+          onChange={set('jump_window_hours')}
+        />
+
+        {error  && <p className={styles.error}>{error}</p>}
+        {saved  && <p className={styles.success}>Paramètres sauvegardés.</p>}
+
+        <button type="submit" className={styles.primaryBtn} disabled={saving}>
+          {saving ? 'Sauvegarde…' : 'Sauvegarder'}
+        </button>
+      </form>
+    </div>
+  )
+}
+
+function SettingField({ label, hint, value, unit, onChange }) {
+  return (
+    <div className={styles.settingRow}>
+      <div>
+        <div className={styles.settingLabel}>{label}</div>
+        <div className={styles.settingHint}>{hint}</div>
+      </div>
+      <div className={styles.settingInput}>
+        <input
+          type="number"
+          min={1}
+          value={value}
+          onChange={onChange}
+          className={styles.numInput}
+        />
+        <span className={styles.unit}>{unit}</span>
+      </div>
+    </div>
+  )
 }

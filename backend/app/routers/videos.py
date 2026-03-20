@@ -16,6 +16,17 @@ def list_videos(db: Session = Depends(get_db), _: User = Depends(require_admin))
     return db.query(Video).order_by(Video.ingested_at.desc()).all()
 
 
+@router.get("/rot/{rot_id}", response_model=list[VideoResponse])
+def list_videos_by_rot(rot_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    """Retourne toutes les vidéos d'un rot (tous propriétaires confondus)."""
+    return (
+        db.query(Video)
+        .filter(Video.rot_id == rot_id)
+        .order_by(Video.owner_id, Video.camera_timestamp)
+        .all()
+    )
+
+
 @router.get("/user/{user_id}", response_model=list[VideoResponse])
 def list_videos_by_user(user_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     """Retourne toutes les vidéos d'un sautant donné."""

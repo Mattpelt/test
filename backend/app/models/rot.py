@@ -1,5 +1,6 @@
 from datetime import datetime
 from sqlalchemy import Column, Date, DateTime, Integer, String, Time
+from sqlalchemy.orm import relationship
 from app.database import Base
 
 
@@ -17,3 +18,5 @@ class Rot(Base):
     source_pdf_path    = Column(String)                        # chemin du PDF source archivé
     parse_status       = Column(String, default="OK")          # OK / ERREUR
     parsed_at          = Column(DateTime, default=datetime.utcnow)
+
+    participants       = relationship("RotParticipant", back_populates="rot", lazy="selectin")

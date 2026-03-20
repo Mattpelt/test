@@ -54,3 +54,8 @@ class RotResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class RotDetailResponse(RotResponse):
+    """RotResponse avec la liste des participants (utilisé pour les détails et /rots/my)."""
+    participants: list[RotParticipantResponse] = []

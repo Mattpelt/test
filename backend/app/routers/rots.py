@@ -9,8 +9,9 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user, require_admin
 from app.database import get_db
 from app.models.rot import Rot
+from app.models.rot_participant import RotParticipant
 from app.models.user import User
-from app.schemas.rot import RotInput, RotResponse
+from app.schemas.rot import RotDetailResponse, RotInput, RotResponse
 from app.services.pdf_parser import parse_afifly_pdf
 from app.services.rot_service import persist_rot, upsert_rot
 
@@ -192,15 +193,39 @@ def create_rot_from_json(payload: RotInput, db: Session = Depends(get_db), _: Us
     return persist_rot(data, db)
 
 
+@router.get("/my", response_model=list[RotDetailResponse])
+def list_my_rots(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """
+    Retourne les rotations auxquelles l'utilisateur connecté a participé,
+    avec la liste complète des participants pour chaque rot.
+    Utilisé par la page d'accueil pour afficher les vidéos du groupe.
+    """
+    rot_ids = (
+        db.query(RotParticipant.rot_id)
+        .filter(RotParticipant.user_id == current_user.id)
+        .distinct()
+        .all()
+    )
+    ids = [r.rot_id for r in rot_ids]
+    if not ids:
+        return []
+    return (
+        db.query(Rot)
+        .filter(Rot.id.in_(ids))
+        .order_by(Rot.rot_date.desc(), Rot.rot_time.desc())
+        .all()
+    )
+
+
 @router.get("", response_model=list[RotResponse])
 def list_rots(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     """Retourne toutes les rotations, de la plus récente à la plus ancienne."""
     return db.query(Rot).order_by(Rot.rot_date.desc(), Rot.rot_time.desc()).all()
 
 
-@router.get("/{rot_id}", response_model=RotResponse)
+@router.get("/{rot_id}", response_model=RotDetailResponse)
 def get_rot(rot_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
-    """Retourne une rotation."""
+    """Retourne une rotation avec ses participants."""
     rot = db.query(Rot).filter(Rot.id == rot_id).first()
     if not rot:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rot introuvable.")

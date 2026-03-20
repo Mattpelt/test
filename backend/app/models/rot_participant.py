@@ -1,4 +1,5 @@
 from sqlalchemy import Column, ForeignKey, Integer, String
+from sqlalchemy.orm import relationship
 from app.database import Base
 
 
@@ -13,3 +14,5 @@ class RotParticipant(Base):
     weight      = Column(Integer)                 # poids en kg
     jump_type   = Column(String)                  # ex : FS4, VRW, AFF...
     group_id    = Column(Integer)                 # numéro du groupe dans ce rot (1, 2, 3...)
+
+    rot         = relationship("Rot", back_populates="participants")
