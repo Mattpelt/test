@@ -48,7 +48,6 @@ services:
       - N8N_SECURE_COOKIE=false
       - N8N_EDITOR_BASE_URL=http://192.168.1.39:5678
       - WEBHOOK_URL=http://192.168.1.39:5678
-    command: ["/bin/sh", "-c", "n8n import:workflow --input=/n8n-workflows/gmail_pdf_afifly.json; n8n start"]
 
 volumes:
   postgres_data:

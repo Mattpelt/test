@@ -233,9 +233,16 @@ Ouvrir dans un navigateur : `http://192.168.1.39:5678`
 
 Se connecter avec les identifiants définis dans le `.env` (`N8N_USER` / `N8N_PASSWORD`).
 
-### 10.2 — Configurer les credentials Gmail (IMAP)
+### 10.2 — Importer le workflow
 
-Le workflow *"gmail PDF Afifly poster"* est déjà importé mais inactif.
+1. Dans n8n, cliquer sur **"Add workflow"** → **"Import from file"** (ou via le menu ⋮)
+2. Sélectionner le fichier `n8n/workflows/gmail_pdf_afifly.json` présent dans le repo
+   > Sur le serveur, ce fichier se trouve dans `~/skydivemediahub/n8n/workflows/gmail_pdf_afifly.json`
+3. Le workflow *"gmail PDF Afifly poster"* apparaît dans la liste
+
+### 10.3 — Configurer les credentials Gmail (IMAP)
+
+Le workflow importé est inactif et sans credentials.
 
 1. Ouvrir le workflow depuis la liste
 2. Cliquer sur le nœud **Email Trigger (IMAP)**
@@ -260,7 +267,7 @@ Le workflow *"gmail PDF Afifly poster"* est déjà importé mais inactif.
 
 5. Cliquer **Test** pour vérifier la connexion, puis **Save**
 
-### 10.3 — Activer le workflow
+### 10.4 — Activer le workflow
 
 De retour sur la liste des workflows (`http://192.168.1.39:5678/home/workflows`) :
 
@@ -269,7 +276,7 @@ De retour sur la liste des workflows (`http://192.168.1.39:5678/home/workflows`)
 
 Le workflow surveille la boîte Gmail en continu et transmet automatiquement chaque PDF Afifly reçu au backend.
 
-### 10.4 — Tester
+### 10.5 — Tester
 
 Envoyer un email avec un PDF Afifly en pièce jointe à l'adresse Gmail configurée.
 Dans les logs du backend, vérifier que le rot a bien été créé :
