@@ -9,5 +9,7 @@ class Settings(Base):
     id                      = Column(Integer, primary_key=True)
     retention_days          = Column(Integer, default=90)           # durée de rétention des vidéos
     matching_window_minutes = Column(Integer, default=45)           # fenêtre de tolérance matching (à calibrer)
+    jump_target_delta_min   = Column(Integer, default=30)           # délai attendu rot_time → vidéo (minutes)
+    jump_window_hours       = Column(Integer, default=2)            # fenêtre max rot_time → vidéo (heures)
     video_storage_path      = Column(String, default="/mnt/videos") # chemin de stockage des vidéos
     updated_at              = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

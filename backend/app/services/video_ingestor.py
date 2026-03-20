@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.models.settings import Settings
 from app.models.user import User
 from app.models.video import Video
+from app.services.matcher import match_videos_to_rots
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,8 @@ def _save_video_record(
     camera_ts: datetime,
     user_id: int,
     retention_days: int,
+    rot_id: int | None = None,
+    group_id: int | None = None,
 ) -> None:
     suffix = Path(file_name).suffix.upper().lstrip(".")
     db.add(Video(
@@ -66,7 +69,9 @@ def _save_video_record(
         file_size_bytes=file_size,
         camera_timestamp=camera_ts,
         owner_id=user_id,
-        matching_status="UNMATCHED",
+        rot_id=rot_id,
+        group_id=group_id,
+        matching_status="MATCHED" if rot_id else "UNMATCHED",
         expires_at=datetime.utcnow() + timedelta(days=retention_days),
     ))
 
@@ -156,14 +161,28 @@ def ingest_device(device_node: str, serial: str, db: Session) -> None:
             logger.warning(f"Aucun compte associé au serial {serial} — onboarding requis.")
             return
 
-        videos = _find_videos(mount_point)
-        logger.info(f"{len(videos)} vidéo(s) trouvée(s)")
+        video_files = _find_videos(mount_point)
+        logger.info(f"{len(video_files)} vidéo(s) trouvée(s) sur le périphérique")
 
-        total = len(videos)
-        ingested = skipped = 0
+        # Matching avant téléchargement : [(filename, cre_ts), ...]
+        video_list = [
+            (v.name, int(os.path.getmtime(v)))
+            for v in video_files
+        ]
+        matches = match_videos_to_rots(video_list, user.id, db)
+
+        total = len(video_files)
+        ingested = skipped = unmatched = 0
         date_str = datetime.now().strftime("%Y-%m-%d")
 
-        for i, video_file in enumerate(videos, 1):
+        for i, video_file in enumerate(video_files, 1):
+            match = matches.get(video_file.name)
+            if not match:
+                unmatched += 1
+                logger.info(f"[{i}/{total}] Ignoré (aucun rot correspondant) : {video_file.name}")
+                continue
+
+            rot_id, group_id = match
             dest_dir = Path(storage_path) / str(user.id) / date_str
             dest_dir.mkdir(parents=True, exist_ok=True)
             dest_path = dest_dir / video_file.name
@@ -173,19 +192,19 @@ def ingest_device(device_node: str, serial: str, db: Session) -> None:
                 continue
 
             size_mb = video_file.stat().st_size / 1_048_576
-            logger.info(f"[{i}/{total}] Copie : {video_file.name} ({size_mb:.0f} Mo)")
+            logger.info(f"[{i}/{total}] Copie : {video_file.name} ({size_mb:.0f} Mo) → rot #{rot_id}")
             shutil.copy2(video_file, dest_path)
             camera_ts = datetime.fromtimestamp(os.path.getmtime(video_file))
             _save_video_record(db, video_file.name, str(dest_path),
                                video_file.stat().st_size, camera_ts,
-                               user.id, retention_days)
+                               user.id, retention_days, rot_id, group_id)
             ingested += 1
             logger.info(f"[{i}/{total}] OK — {ingested} ingérée(s), {skipped} ignorée(s) jusqu'ici")
 
         db.commit()
         logger.info(
             f"Ingestion terminée — {user.first_name} {user.last_name} : "
-            f"{ingested} ingérée(s), {skipped} déjà présente(s)."
+            f"{ingested} ingérée(s), {skipped} déjà présente(s), {unmatched} sans rot."
         )
 
     except Exception as e:
@@ -265,22 +284,28 @@ def ingest_gopro_http(serial: str, db: Session) -> None:
         logger.info(f"Aucune vidéo sur la GoPro — {serial}")
         return
 
-    # Sélection de la vidéo la plus récente uniquement
-    all_files.sort(key=lambda x: x[3], reverse=True)
-    latest = all_files[0]
-    folder, name, size, cre = latest
-    logger.info(
-        f"GoPro : {len(all_files)} vidéo(s) présente(s) — "
-        f"sélection de la plus récente : {name} "
-        f"({datetime.fromtimestamp(cre).strftime('%Y-%m-%d %H:%M:%S')})"
-    )
-    all_files = [latest]
+    logger.info(f"GoPro : {len(all_files)} vidéo(s) présente(s) sur la carte SD")
 
-    ingested = skipped = 0
-    total = 1
+    # Matching avant téléchargement
+    video_list = [(name, cre) for _, name, _, cre in all_files]
+    matches = match_videos_to_rots(video_list, user.id, db)
+
+    # Index par nom pour accès rapide aux métadonnées
+    file_meta = {name: (folder, size, cre) for folder, name, size, cre in all_files}
+
+    ingested = skipped = unmatched = 0
+    total = len(all_files)
     date_str = datetime.now().strftime("%Y-%m-%d")
 
-    for i, (folder, name, size, cre) in enumerate(all_files, 1):
+    for i, (name, cre) in enumerate(video_list, 1):
+        match = matches.get(name)
+        if not match:
+            unmatched += 1
+            logger.info(f"[{i}/{total}] Ignoré (aucun rot correspondant) : {name}")
+            continue
+
+        rot_id, group_id = match
+        folder, size, cre = file_meta[name]
         dest_dir = Path(storage_path) / str(user.id) / date_str
         dest_dir.mkdir(parents=True, exist_ok=True)
         dest_path = dest_dir / name
@@ -292,7 +317,7 @@ def ingest_gopro_http(serial: str, db: Session) -> None:
 
         url = f"{GOPRO_DOWNLOAD_BASE}/{folder}/{name}"
         size_mb = size / 1_048_576
-        logger.info(f"[{i}/{total}] Téléchargement : {name} ({size_mb:.0f} Mo)")
+        logger.info(f"[{i}/{total}] Téléchargement : {name} ({size_mb:.0f} Mo) → rot #{rot_id}")
 
         try:
             with requests.get(url, stream=True, timeout=300) as dl:
@@ -308,14 +333,14 @@ def ingest_gopro_http(serial: str, db: Session) -> None:
         camera_ts = datetime.fromtimestamp(cre) if cre else datetime.utcnow()
         actual_size = dest_path.stat().st_size
         _save_video_record(db, name, str(dest_path), actual_size,
-                           camera_ts, user.id, retention_days)
+                           camera_ts, user.id, retention_days, rot_id, group_id)
         ingested += 1
         logger.info(f"[{i}/{total}] OK — {ingested} ingérée(s), {skipped} ignorée(s) jusqu'ici")
 
     db.commit()
     logger.info(
         f"GoPro HTTP terminé — {user.first_name} {user.last_name} : "
-        f"{ingested} ingérée(s), {skipped} déjà présente(s)."
+        f"{ingested} ingérée(s), {skipped} déjà présente(s), {unmatched} sans rot."
     )
 
 
@@ -363,10 +388,31 @@ def ingest_mtp_device(serial: str, db: Session) -> None:
         video_files = _list_mtp_videos(camera)
         logger.info(f"{len(video_files)} vidéo(s) MTP trouvée(s) — {serial}")
 
-        ingested = skipped = 0
+        # Récupérer les horodatages pour le matching (sans télécharger)
+        timestamps: dict[str, int] = {}
+        for folder, name in video_files:
+            try:
+                info = camera.file_get_info(folder, name)
+                timestamps[name] = int(info.file.mtime)
+            except gp.GPhoto2Error:
+                timestamps[name] = int(datetime.utcnow().timestamp())
+
+        # Matching avant téléchargement
+        video_list = [(name, timestamps[name]) for _, name in video_files]
+        matches = match_videos_to_rots(video_list, user.id, db)
+
+        ingested = skipped = unmatched = 0
+        total = len(video_files)
         date_str = datetime.now().strftime("%Y-%m-%d")
 
-        for folder, name in video_files:
+        for i, (folder, name) in enumerate(video_files, 1):
+            match = matches.get(name)
+            if not match:
+                unmatched += 1
+                logger.info(f"[{i}/{total}] Ignoré (aucun rot correspondant) : {name}")
+                continue
+
+            rot_id, group_id = match
             dest_dir = Path(storage_path) / str(user.id) / date_str
             dest_dir.mkdir(parents=True, exist_ok=True)
             dest_path = dest_dir / name
@@ -375,25 +421,20 @@ def ingest_mtp_device(serial: str, db: Session) -> None:
                 skipped += 1
                 continue
 
-            # Horodatage caméra depuis les métadonnées MTP
-            try:
-                info = camera.file_get_info(folder, name)
-                camera_ts = datetime.fromtimestamp(info.file.mtime)
-            except gp.GPhoto2Error:
-                camera_ts = datetime.utcnow()
-
+            camera_ts = datetime.fromtimestamp(timestamps[name])
+            logger.info(f"[{i}/{total}] Téléchargement MTP : {name} → rot #{rot_id}")
             camera_file = camera.file_get(folder, name, gp.GP_FILE_TYPE_NORMAL)
             camera_file.save(str(dest_path))
 
             file_size = dest_path.stat().st_size
             _save_video_record(db, name, str(dest_path), file_size,
-                               camera_ts, user.id, retention_days)
+                               camera_ts, user.id, retention_days, rot_id, group_id)
             ingested += 1
 
         db.commit()
         logger.info(
             f"{user.first_name} {user.last_name} (MTP) — "
-            f"{ingested} ingérée(s), {skipped} ignorée(s)."
+            f"{ingested} ingérée(s), {skipped} déjà présente(s), {unmatched} sans rot."
         )
 
     except Exception as e:
