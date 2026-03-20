@@ -9,13 +9,11 @@ router = APIRouter(prefix="/settings", tags=["Configuration"])
 
 
 class SettingsResponse(BaseModel):
-    retention_days:        int
+    retention_days:          int
     matching_window_minutes: int
-    jump_target_delta_min: int
-    jump_window_hours:     int
-    video_storage_path:    str
-    gmail_address:         str | None
-    gmail_sender_filter:   str | None
+    jump_target_delta_min:   int
+    jump_window_hours:       int
+    video_storage_path:      str
 
     class Config:
         from_attributes = True
@@ -27,8 +25,6 @@ class SettingsUpdate(BaseModel):
     jump_target_delta_min:   int | None = None
     jump_window_hours:       int | None = None
     video_storage_path:      str | None = None
-    gmail_address:           str | None = None
-    gmail_sender_filter:     str | None = None
 
 
 @router.get("", response_model=SettingsResponse)

@@ -131,8 +131,9 @@ step "5/8 — Configuration .env"
 if [ -f ".env" ]; then
     warn ".env déjà présent — ignoré (supprimez-le pour reconfigurer)"
 else
-    # Générer un mot de passe aléatoire
+    # Générer des mots de passe aléatoires
     DB_PASS=$(openssl rand -base64 32 | tr -d '/+=\n' | head -c 28)
+    N8N_PASS=$(openssl rand -base64 32 | tr -d '/+=\n' | head -c 28)
 
     # Demander le chemin de stockage vidéo
     echo ""
@@ -147,11 +148,14 @@ POSTGRES_PASSWORD=${DB_PASS}
 POSTGRES_DB=skydivemediahub
 DATABASE_URL=postgresql://skydive:${DB_PASS}@db:5432/skydivemediahub
 VIDEO_STORAGE_PATH=${VIDEO_PATH}
+N8N_USER=admin
+N8N_PASSWORD=${N8N_PASS}
 EOF
 
     log ".env créé"
     warn "Mot de passe PostgreSQL généré : ${DB_PASS}"
-    warn "Ce mot de passe est stocké dans .env — ne le committez jamais."
+    warn "Mot de passe n8n généré       : ${N8N_PASS}  (login: admin)"
+    warn "Ces mots de passe sont stockés dans .env — ne le committez jamais."
 fi
 
 # Lire le chemin vidéo depuis .env
@@ -235,6 +239,7 @@ if sudo docker compose -f "$PROJECT_DIR/docker-compose.yml" ps | grep -q "runnin
     echo ""
     echo -e "  API        : ${CYAN}http://${LOCAL_IP}:8000${NC}"
     echo -e "  Swagger UI : ${CYAN}http://${LOCAL_IP}:8000/docs${NC}"
+    echo -e "  n8n        : ${CYAN}http://${LOCAL_IP}:5678${NC}  (login: admin)"
     echo ""
     echo -e "  Commandes utiles (depuis ~/skydivemediahub) :"
     echo -e "    ${YELLOW}sudo docker compose logs -f backend${NC}          # logs en direct"

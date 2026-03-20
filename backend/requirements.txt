@@ -18,14 +18,6 @@ gphoto2==2.5.0
 # HTTP client (Open GoPro API via USB NCM)
 requests==2.32.3
 
-# Gmail API
-google-auth==2.29.0
-google-auth-oauthlib==1.2.0
-google-api-python-client==2.128.0
-
-# Tâches de fond (polling Gmail, nettoyage rétention)
-apscheduler==3.10.4
-
 # Variables d'environnement
 python-dotenv==1.0.1
 

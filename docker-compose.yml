@@ -27,12 +27,24 @@ services:
       - ./backend:/app                           # rechargement du code sans rebuild
       - ${VIDEO_STORAGE_PATH}:/mnt/videos        # HDD(s) SATA pour les vidéos
       - /dev:/dev                                # accès complet aux périphériques USB (MTP + Mass Storage)
-      - ./gmail_credentials:/app/gmail_credentials  # credentials OAuth2 Gmail (token.json)
     ports:
       - "8000:8000"
     depends_on:
       db:
         condition: service_healthy          # attend que PostgreSQL soit prêt
 
+  n8n:
+    image: n8nio/n8n
+    restart: always
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=${N8N_USER}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD}
+
 volumes:
   postgres_data:
+  n8n_data:
