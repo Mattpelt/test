@@ -242,10 +242,23 @@ def ingest_gopro_http(serial: str, db: Session) -> None:
                 cre = int(f.get("cre", 0))
                 all_files.append((folder, name, size, cre))
 
-    logger.info(f"{len(all_files)} vidéo(s) GoPro trouvée(s) — {serial}")
+    if not all_files:
+        logger.info(f"Aucune vidéo sur la GoPro — {serial}")
+        return
+
+    # Sélection de la vidéo la plus récente uniquement
+    all_files.sort(key=lambda x: x[3], reverse=True)
+    latest = all_files[0]
+    folder, name, size, cre = latest
+    logger.info(
+        f"GoPro : {len(all_files)} vidéo(s) présente(s) — "
+        f"sélection de la plus récente : {name} "
+        f"({datetime.fromtimestamp(cre).strftime('%Y-%m-%d %H:%M:%S')})"
+    )
+    all_files = [latest]
 
     ingested = skipped = 0
-    total = len(all_files)
+    total = 1
     date_str = datetime.now().strftime("%Y-%m-%d")
 
     for i, (folder, name, size, cre) in enumerate(all_files, 1):
