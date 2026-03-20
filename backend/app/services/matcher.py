@@ -39,7 +39,7 @@ def match_videos_to_rots(
     )
 
     if not records:
-        logger.warning(f"Aucun rot trouvé pour user_id={user_id}")
+        logger.warning(f"[MATCHING] Aucun rot en base pour user_id={user_id} — toutes les vidéos seront ignorées")
         return {filename: None for filename, _ in videos}
 
     result: dict[str, tuple[int, int] | None] = {}
@@ -62,13 +62,13 @@ def match_videos_to_rots(
 
         if best_rot_id:
             logger.info(
-                f"Vidéo {filename} ({video_dt.strftime('%H:%M:%S')}) "
-                f"→ rot #{best_rot_id} (score {best_score/60:.1f} min)"
+                f"[MATCHING] ✔ {filename} (horodatage {video_dt.strftime('%Y-%m-%d %H:%M:%S')}) "
+                f"→ rot #{best_rot_id} (écart {best_score/60:.1f} min par rapport à la cible)"
             )
         else:
             logger.warning(
-                f"Vidéo {filename} ({video_dt.strftime('%H:%M:%S')}) "
-                f"— aucun rot correspondant dans la fenêtre de {window}"
+                f"[MATCHING] ✘ {filename} (horodatage {video_dt.strftime('%Y-%m-%d %H:%M:%S')}) "
+                f"— aucun rot dans la fenêtre de {window} — vidéo ignorée"
             )
 
         result[filename] = (best_rot_id, best_group_id) if best_rot_id else None

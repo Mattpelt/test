@@ -33,7 +33,10 @@ def persist_rot(data: dict, db: Session, source_pdf_path: str | None = None) -> 
     db.refresh(rot)
 
     total = len(data.get("participants", []))
-    logger.info(f"Rot n°{rot.rot_number} créé — {total} participants, {matched} matchés.")
+    logger.info(
+        f"[ROT] ✚ Créé  — n°{rot.rot_number} | {rot.rot_date} {rot.rot_time} | "
+        f"{total} participants ({matched} compte(s) associé(s))"
+    )
     return rot
 
 
@@ -66,7 +69,10 @@ def upsert_rot(data: dict, db: Session, source_pdf_path: str | None = None) -> R
     participants_changed = existing_names != new_names
 
     if not fields_changed and not participants_changed:
-        logger.info(f"Rot n°{data['rot_number']} du {data['rot_date']} déjà à jour — ignoré.")
+        logger.info(
+            f"[ROT] ↩ Ignoré — n°{data['rot_number']} du {data['rot_date']} déjà en base et à jour "
+            f"(reçu à nouveau, probablement via email — aucune action nécessaire)"
+        )
         return existing
 
     if fields_changed:
@@ -81,7 +87,10 @@ def upsert_rot(data: dict, db: Session, source_pdf_path: str | None = None) -> R
 
     db.commit()
     db.refresh(existing)
-    logger.info(f"Rot n°{data['rot_number']} du {data['rot_date']} mis à jour.")
+    logger.info(
+        f"[ROT] ✎ Mis à jour — n°{data['rot_number']} du {data['rot_date']} "
+        f"({'champs + ' if fields_changed else ''}{'participants' if participants_changed else 'champs'})"
+    )
     return existing
 
 

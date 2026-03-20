@@ -1,3 +1,4 @@
+import logging
 import os
 import tempfile
 
@@ -9,7 +10,9 @@ from app.database import get_db
 from app.models.rot import Rot
 from app.schemas.rot import RotInput, RotResponse
 from app.services.pdf_parser import parse_afifly_pdf
-from app.services.rot_service import persist_rot
+from app.services.rot_service import persist_rot, upsert_rot
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/rots", tags=["Rotations"])
 
@@ -141,19 +144,7 @@ def create_rot_from_pdf(file: UploadFile = File(...), db: Session = Depends(get_
             detail=f"Erreur de parsing : {e}",
         )
 
-    # Vérifier si ce rot existe déjà
-    existing = db.query(Rot).filter(
-        Rot.rot_number == data["rot_number"],
-        Rot.rot_date   == data["rot_date"],
-    ).first()
-    if existing:
-        os.unlink(tmp_path)
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Le rot n°{data['rot_number']} du {data['rot_date']} existe déjà.",
-        )
-
-    rot = persist_rot(data, db, source_pdf_path=tmp_path)
+    rot = upsert_rot(data, db, source_pdf_path=tmp_path)
     return rot
 
 

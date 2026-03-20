@@ -153,16 +153,16 @@ def ingest_device(device_node: str, serial: str, db: Session) -> None:
         # Doit précéder le lookup utilisateur car le serial USB peut être générique
         real_serial = _extract_insv_serial(mount_point)
         if real_serial:
-            logger.info(f"Serial extrait des métadonnées : {real_serial} (USB : {serial})")
+            logger.info(f"[INGEST][Block] Serial corrigé depuis métadonnées .insv : {real_serial} (USB brut : {serial})")
             serial = real_serial
 
         user = _find_user(serial, db)
         if not user:
-            logger.warning(f"Aucun compte associé au serial {serial} — onboarding requis.")
             return
 
+        logger.info(f"[INGEST][Block] ━━━ Début ingestion — {user.first_name} {user.last_name} | serial: {serial} ━━━")
         video_files = _find_videos(mount_point)
-        logger.info(f"{len(video_files)} vidéo(s) trouvée(s) sur le périphérique")
+        logger.info(f"[INGEST][Block] {len(video_files)} vidéo(s) trouvée(s) sur le périphérique")
 
         # Matching avant téléchargement : [(filename, cre_ts), ...]
         video_list = [
@@ -179,7 +179,7 @@ def ingest_device(device_node: str, serial: str, db: Session) -> None:
             match = matches.get(video_file.name)
             if not match:
                 unmatched += 1
-                logger.info(f"[{i}/{total}] Ignoré (aucun rot correspondant) : {video_file.name}")
+                logger.info(f"[INGEST][Block] [{i}/{total}] Ignoré — aucun rot correspondant : {video_file.name}")
                 continue
 
             rot_id, group_id = match
@@ -189,22 +189,23 @@ def ingest_device(device_node: str, serial: str, db: Session) -> None:
 
             if dest_path.exists():
                 skipped += 1
+                logger.info(f"[INGEST][Block] [{i}/{total}] Ignoré — déjà présent : {video_file.name}")
                 continue
 
             size_mb = video_file.stat().st_size / 1_048_576
-            logger.info(f"[{i}/{total}] Copie : {video_file.name} ({size_mb:.0f} Mo) → rot #{rot_id}")
+            logger.info(f"[INGEST][Block] [{i}/{total}] Copie : {video_file.name} ({size_mb:.0f} Mo) → rot #{rot_id}")
             shutil.copy2(video_file, dest_path)
             camera_ts = datetime.fromtimestamp(os.path.getmtime(video_file))
             _save_video_record(db, video_file.name, str(dest_path),
                                video_file.stat().st_size, camera_ts,
                                user.id, retention_days, rot_id, group_id)
             ingested += 1
-            logger.info(f"[{i}/{total}] OK — {ingested} ingérée(s), {skipped} ignorée(s) jusqu'ici")
+            logger.info(f"[INGEST][Block] [{i}/{total}] ✔ Copiée avec succès")
 
         db.commit()
         logger.info(
-            f"Ingestion terminée — {user.first_name} {user.last_name} : "
-            f"{ingested} ingérée(s), {skipped} déjà présente(s), {unmatched} sans rot."
+            f"[INGEST][Block] ━━━ Fin ingestion — {user.first_name} {user.last_name} : "
+            f"{ingested} copiée(s), {skipped} déjà présente(s), {unmatched} sans rot ━━━"
         )
 
     except Exception as e:
@@ -236,17 +237,19 @@ def ingest_gopro_http(serial: str, db: Session) -> None:
     if not user:
         return
 
+    logger.info(f"[INGEST][GoPro] ━━━ Début ingestion — {user.first_name} {user.last_name} | serial: {serial} ━━━")
     retention_days, storage_path = _get_settings(db)
 
     # Laisser le temps à l'interface USB NCM d'être configurée
+    logger.info("[INGEST][GoPro] Attente interface USB NCM (5s)...")
     time.sleep(5)
 
     # Activer le wired USB control mode (requis sur HERO11 pour accéder aux médias)
     try:
         r = requests.get(f"{GOPRO_BASE_URL}/gopro/camera/control/wired_usb?p=1", timeout=10)
-        logger.info(f"GoPro wired USB control : {r.status_code} {r.text}")
+        logger.info(f"[INGEST][GoPro] Wired USB control activé : HTTP {r.status_code}")
     except requests.RequestException as e:
-        logger.warning(f"GoPro wired USB control — erreur : {e}")
+        logger.warning(f"[INGEST][GoPro] Wired USB control — erreur (non bloquant) : {e}")
 
     time.sleep(2)
 
@@ -259,15 +262,16 @@ def ingest_gopro_http(serial: str, db: Session) -> None:
             resp.raise_for_status()
             media_data = resp.json()
             if media_data.get("media"):
+                logger.info(f"[INGEST][GoPro] Media list obtenue (tentative {attempt}/5)")
                 break
-            logger.info(f"GoPro media/list vide — nouvel essai dans 5s ({attempt}/5)")
+            logger.info(f"[INGEST][GoPro] Media list vide — nouvel essai dans 5s ({attempt}/5)")
             time.sleep(5)
         except requests.RequestException as e:
-            logger.warning(f"GoPro HTTP tentative {attempt}/5 — erreur : {e}")
+            logger.warning(f"[INGEST][GoPro] Tentative {attempt}/5 échouée : {e}")
             time.sleep(5)
 
     if not media_data:
-        logger.error("GoPro HTTP — aucune réponse après 5 tentatives")
+        logger.error("[INGEST][GoPro] Aucune réponse après 5 tentatives — ingestion abandonnée")
         return
     # Format: {"id": "...", "media": [{"d": "100GOPRO", "fs": [{"n": "GX010488.MP4", "s": "...", "cre": timestamp}]}]}
     all_files: list[tuple[str, str, int, int]] = []  # (dossier, nom, taille, cre)
@@ -281,10 +285,10 @@ def ingest_gopro_http(serial: str, db: Session) -> None:
                 all_files.append((folder, name, size, cre))
 
     if not all_files:
-        logger.info(f"Aucune vidéo sur la GoPro — {serial}")
+        logger.info(f"[INGEST][GoPro] Aucune vidéo trouvée sur la carte SD")
         return
 
-    logger.info(f"GoPro : {len(all_files)} vidéo(s) présente(s) sur la carte SD")
+    logger.info(f"[INGEST][GoPro] {len(all_files)} vidéo(s) présente(s) sur la carte SD")
 
     # Matching avant téléchargement
     video_list = [(name, cre) for _, name, _, cre in all_files]
@@ -301,7 +305,7 @@ def ingest_gopro_http(serial: str, db: Session) -> None:
         match = matches.get(name)
         if not match:
             unmatched += 1
-            logger.info(f"[{i}/{total}] Ignoré (aucun rot correspondant) : {name}")
+            logger.info(f"[INGEST][GoPro] [{i}/{total}] Ignoré — aucun rot correspondant : {name}")
             continue
 
         rot_id, group_id = match
@@ -312,12 +316,12 @@ def ingest_gopro_http(serial: str, db: Session) -> None:
 
         if dest_path.exists():
             skipped += 1
-            logger.info(f"[{i}/{total}] Ignoré (déjà présent) : {name}")
+            logger.info(f"[INGEST][GoPro] [{i}/{total}] Ignoré — déjà présent : {name}")
             continue
 
         url = f"{GOPRO_DOWNLOAD_BASE}/{folder}/{name}"
         size_mb = size / 1_048_576
-        logger.info(f"[{i}/{total}] Téléchargement : {name} ({size_mb:.0f} Mo) → rot #{rot_id}")
+        logger.info(f"[INGEST][GoPro] [{i}/{total}] Téléchargement : {name} ({size_mb:.0f} Mo) → rot #{rot_id}")
 
         try:
             with requests.get(url, stream=True, timeout=300) as dl:
@@ -326,7 +330,7 @@ def ingest_gopro_http(serial: str, db: Session) -> None:
                     for chunk in dl.iter_content(chunk_size=1 * 1024 * 1024):
                         out.write(chunk)
         except requests.RequestException as e:
-            logger.error(f"[{i}/{total}] Échec téléchargement {name} : {e}")
+            logger.error(f"[INGEST][GoPro] [{i}/{total}] Échec téléchargement {name} : {e}")
             dest_path.unlink(missing_ok=True)
             continue
 
@@ -335,12 +339,12 @@ def ingest_gopro_http(serial: str, db: Session) -> None:
         _save_video_record(db, name, str(dest_path), actual_size,
                            camera_ts, user.id, retention_days, rot_id, group_id)
         ingested += 1
-        logger.info(f"[{i}/{total}] OK — {ingested} ingérée(s), {skipped} ignorée(s) jusqu'ici")
+        logger.info(f"[INGEST][GoPro] [{i}/{total}] ✔ Téléchargée avec succès")
 
     db.commit()
     logger.info(
-        f"GoPro HTTP terminé — {user.first_name} {user.last_name} : "
-        f"{ingested} ingérée(s), {skipped} déjà présente(s), {unmatched} sans rot."
+        f"[INGEST][GoPro] ━━━ Fin ingestion — {user.first_name} {user.last_name} : "
+        f"{ingested} téléchargée(s), {skipped} déjà présente(s), {unmatched} sans rot ━━━"
     )
 
 
@@ -385,8 +389,9 @@ def ingest_mtp_device(serial: str, db: Session) -> None:
         return
 
     try:
+        logger.info(f"[INGEST][MTP] ━━━ Début ingestion — {user.first_name} {user.last_name} | serial: {serial} ━━━")
         video_files = _list_mtp_videos(camera)
-        logger.info(f"{len(video_files)} vidéo(s) MTP trouvée(s) — {serial}")
+        logger.info(f"[INGEST][MTP] {len(video_files)} vidéo(s) trouvée(s) sur la caméra")
 
         # Récupérer les horodatages pour le matching (sans télécharger)
         timestamps: dict[str, int] = {}
@@ -409,7 +414,7 @@ def ingest_mtp_device(serial: str, db: Session) -> None:
             match = matches.get(name)
             if not match:
                 unmatched += 1
-                logger.info(f"[{i}/{total}] Ignoré (aucun rot correspondant) : {name}")
+                logger.info(f"[INGEST][MTP] [{i}/{total}] Ignoré — aucun rot correspondant : {name}")
                 continue
 
             rot_id, group_id = match
@@ -419,10 +424,11 @@ def ingest_mtp_device(serial: str, db: Session) -> None:
 
             if dest_path.exists():
                 skipped += 1
+                logger.info(f"[INGEST][MTP] [{i}/{total}] Ignoré — déjà présent : {name}")
                 continue
 
             camera_ts = datetime.fromtimestamp(timestamps[name])
-            logger.info(f"[{i}/{total}] Téléchargement MTP : {name} → rot #{rot_id}")
+            logger.info(f"[INGEST][MTP] [{i}/{total}] Téléchargement : {name} → rot #{rot_id}")
             camera_file = camera.file_get(folder, name, gp.GP_FILE_TYPE_NORMAL)
             camera_file.save(str(dest_path))
 
@@ -430,11 +436,12 @@ def ingest_mtp_device(serial: str, db: Session) -> None:
             _save_video_record(db, name, str(dest_path), file_size,
                                camera_ts, user.id, retention_days, rot_id, group_id)
             ingested += 1
+            logger.info(f"[INGEST][MTP] [{i}/{total}] ✔ Téléchargée avec succès")
 
         db.commit()
         logger.info(
-            f"{user.first_name} {user.last_name} (MTP) — "
-            f"{ingested} ingérée(s), {skipped} déjà présente(s), {unmatched} sans rot."
+            f"[INGEST][MTP] ━━━ Fin ingestion — {user.first_name} {user.last_name} : "
+            f"{ingested} téléchargée(s), {skipped} déjà présente(s), {unmatched} sans rot ━━━"
         )
 
     except Exception as e:

@@ -26,10 +26,17 @@ app.include_router(settings.router)
 @app.on_event("startup")
 def on_startup():
     """Au démarrage : création des tables, migrations, settings par défaut, surveillant USB."""
+    logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    logger.info("  SkyDive Media Hub — Démarrage")
+    logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     Base.metadata.create_all(bind=engine)
+    logger.info("Base de données : tables vérifiées / créées.")
     _migrate()
     _init_settings()
     start_usb_watcher()
+    logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    logger.info("  Démarrage terminé — prêt à recevoir des requêtes.")
+    logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
 
 def _migrate():
@@ -37,18 +44,19 @@ def _migrate():
     migrations = [
         "ALTER TABLE settings ADD COLUMN IF NOT EXISTS jump_target_delta_min INTEGER DEFAULT 30",
         "ALTER TABLE settings ADD COLUMN IF NOT EXISTS jump_window_hours INTEGER DEFAULT 2",
-        "ALTER TABLE settings ADD COLUMN IF NOT EXISTS gmail_address VARCHAR DEFAULT ''",
-        "ALTER TABLE settings ADD COLUMN IF NOT EXISTS gmail_sender_filter VARCHAR DEFAULT ''",
         "ALTER TABLE videos ADD COLUMN IF NOT EXISTS rot_id INTEGER REFERENCES rots(id)",
         "ALTER TABLE videos ADD COLUMN IF NOT EXISTS group_id INTEGER",
     ]
     with engine.connect() as conn:
+        applied = 0
         for sql in migrations:
             try:
                 conn.execute(text(sql))
+                applied += 1
             except Exception as e:
                 logger.warning(f"Migration ignorée ({e}): {sql[:60]}")
         conn.commit()
+    logger.info(f"Migrations : {applied}/{len(migrations)} appliquées.")
 
 
 def _init_settings():

@@ -35,18 +35,22 @@ def camera_connected(event: CameraEvent):
     Appelé par la règle udev de l'hôte quand une caméra est branchée.
     Déclenche l'ingestion en arrière-plan (non bloquant).
     """
-    logger.info(f"Événement caméra reçu — serial: {event.serial}, mtp: {event.mtp}, vendor_id: {repr(event.vendor_id)}")
+    logger.info(
+        f"[USB] Caméra branchée — serial: {event.serial} | "
+        f"mtp: {event.mtp} | vendor_id: {repr(event.vendor_id)} | "
+        f"device_node: {event.device_node}"
+    )
 
     if event.mtp and event.vendor_id == "2672":
-        # GoPro — ingestion via Open GoPro HTTP API (USB NCM)
+        logger.info(f"[USB] → GoPro HERO détectée (vendor 2672) — ingestion via Open GoPro HTTP API")
         _run_in_background(ingest_gopro_http, serial=event.serial)
     elif event.mtp:
-        # Autres caméras MTP (Sony, etc.)
+        logger.info(f"[USB] → Caméra MTP/PTP détectée — ingestion via gphoto2")
         _run_in_background(ingest_mtp_device, serial=event.serial)
     elif event.device_node:
-        # USB Mass Storage (Insta360 X5, SD card, etc.)
+        logger.info(f"[USB] → USB Mass Storage détecté ({event.device_node}) — ingestion via block device")
         _run_in_background(ingest_device, device_node=event.device_node, serial=event.serial)
     else:
-        logger.warning("Événement caméra reçu sans device_node ni mtp=True — ignoré.")
+        logger.warning(f"[USB] Événement caméra ignoré — ni device_node ni mtp=True (serial: {event.serial})")
 
     return {"status": "ingestion démarrée"}
