@@ -52,12 +52,15 @@ def main():
     flow = InstalledAppFlow.from_client_secrets_file(str(CREDENTIALS_FILE), SCOPES)
 
     if args.console:
-        # Mode serveur : affiche l'URL, attend le code collé manuellement
+        # Mode serveur headless : redirect vers localhost (page d'erreur normale)
+        flow.redirect_uri = "http://localhost"
         auth_url, _ = flow.authorization_url(prompt="consent")
         print("\nOuvre cette URL dans ton navigateur :")
         print(f"\n  {auth_url}\n")
-        code = input("Colle ici le code d'autorisation : ").strip()
-        flow.fetch_token(code=code)
+        print("Après connexion, le navigateur affichera une erreur 'localhost refused'.")
+        print("C'est normal — copie l'URL COMPLÈTE de la barre d'adresse et colle-la ici.")
+        redirect_response = input("\nURL complète de redirection : ").strip()
+        flow.fetch_token(authorization_response=redirect_response)
         creds = flow.credentials
     else:
         # Mode local : ouvre le navigateur automatiquement
