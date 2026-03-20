@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import gphoto2 as gp
+import requests
 from sqlalchemy.orm import Session
 
 from app.models.settings import Settings
@@ -199,7 +200,94 @@ def ingest_device(device_node: str, serial: str, db: Session) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Path 2 : MTP/PTP (GoPro, Insta360, Sony, etc.)
+# Path 2 : GoPro via HTTP (Open GoPro API — USB NCM)
+# ---------------------------------------------------------------------------
+
+GOPRO_BASE_URL = "http://172.26.166.51:8080"
+GOPRO_MEDIA_LIST = f"{GOPRO_BASE_URL}/gopro/media/list"
+GOPRO_DOWNLOAD_BASE = f"{GOPRO_BASE_URL}/videos/DCIM"
+
+
+def ingest_gopro_http(serial: str, db: Session) -> None:
+    """
+    Ingestion GoPro via Open GoPro HTTP API (interface USB NCM).
+    Télécharge tous les fichiers vidéo présents sur la caméra.
+    """
+    user = _find_user(serial, db)
+    if not user:
+        return
+
+    retention_days, storage_path = _get_settings(db)
+
+    # Laisser le temps à l'interface USB NCM d'être configurée
+    time.sleep(3)
+
+    try:
+        resp = requests.get(GOPRO_MEDIA_LIST, timeout=10)
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        logger.error(f"GoPro HTTP — impossible d'accéder à media/list : {e}")
+        return
+
+    media_data = resp.json()
+    # Format: {"id": "...", "media": [{"d": "100GOPRO", "fs": [{"n": "GX010488.MP4", "s": "...", "cre": timestamp}]}]}
+    all_files: list[tuple[str, str, int, int]] = []  # (dossier, nom, taille, cre)
+    for entry in media_data.get("media", []):
+        folder = entry.get("d", "")
+        for f in entry.get("fs", []):
+            name = f.get("n", "")
+            if Path(name).suffix.lower() in VIDEO_EXTENSIONS:
+                size = int(f.get("s", 0))
+                cre = int(f.get("cre", 0))
+                all_files.append((folder, name, size, cre))
+
+    logger.info(f"{len(all_files)} vidéo(s) GoPro trouvée(s) — {serial}")
+
+    ingested = skipped = 0
+    total = len(all_files)
+    date_str = datetime.now().strftime("%Y-%m-%d")
+
+    for i, (folder, name, size, cre) in enumerate(all_files, 1):
+        dest_dir = Path(storage_path) / str(user.id) / date_str
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest_path = dest_dir / name
+
+        if dest_path.exists():
+            skipped += 1
+            logger.info(f"[{i}/{total}] Ignoré (déjà présent) : {name}")
+            continue
+
+        url = f"{GOPRO_DOWNLOAD_BASE}/{folder}/{name}"
+        size_mb = size / 1_048_576
+        logger.info(f"[{i}/{total}] Téléchargement : {name} ({size_mb:.0f} Mo)")
+
+        try:
+            with requests.get(url, stream=True, timeout=300) as dl:
+                dl.raise_for_status()
+                with open(dest_path, "wb") as out:
+                    for chunk in dl.iter_content(chunk_size=1 * 1024 * 1024):
+                        out.write(chunk)
+        except requests.RequestException as e:
+            logger.error(f"[{i}/{total}] Échec téléchargement {name} : {e}")
+            dest_path.unlink(missing_ok=True)
+            continue
+
+        camera_ts = datetime.fromtimestamp(cre) if cre else datetime.utcnow()
+        actual_size = dest_path.stat().st_size
+        _save_video_record(db, name, str(dest_path), actual_size,
+                           camera_ts, user.id, retention_days)
+        ingested += 1
+        logger.info(f"[{i}/{total}] OK — {ingested} ingérée(s), {skipped} ignorée(s) jusqu'ici")
+
+    db.commit()
+    logger.info(
+        f"GoPro HTTP terminé — {user.first_name} {user.last_name} : "
+        f"{ingested} ingérée(s), {skipped} déjà présente(s)."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Path 3 : MTP/PTP (Insta360, Sony, etc.)
 # ---------------------------------------------------------------------------
 
 def _list_mtp_videos(camera: gp.Camera, path: str = "/") -> list[tuple[str, str]]:

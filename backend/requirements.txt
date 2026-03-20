@@ -15,6 +15,9 @@ pdfplumber==0.11.0
 # Transfert fichiers caméras MTP/PTP (GoPro, Insta360, Sony, etc.)
 gphoto2==2.5.0
 
+# HTTP client (Open GoPro API via USB NCM)
+requests==2.32.3
+
 # Gmail API
 google-auth==2.29.0
 google-auth-oauthlib==1.2.0
