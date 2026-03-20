@@ -53,7 +53,12 @@ def main():
 
     if args.console:
         # Mode serveur : affiche l'URL, attend le code collé manuellement
-        creds = flow.run_console()
+        auth_url, _ = flow.authorization_url(prompt="consent")
+        print("\nOuvre cette URL dans ton navigateur :")
+        print(f"\n  {auth_url}\n")
+        code = input("Colle ici le code d'autorisation : ").strip()
+        flow.fetch_token(code=code)
+        creds = flow.credentials
     else:
         # Mode local : ouvre le navigateur automatiquement
         creds = flow.run_local_server(port=0)
