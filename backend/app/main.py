@@ -7,7 +7,7 @@ from app import models  # noqa: F401 — enregistre les modèles auprès de SQLA
 from app.models.settings import Settings
 from app.services.usb_watcher import start_usb_watcher
 from app.services.gmail_poller import check_new_rots
-from app.routers import users, rots, videos, internal
+from app.routers import users, rots, videos, internal, settings
 
 logging.basicConfig(
     level=logging.INFO,
@@ -22,6 +22,7 @@ app.include_router(users.router)
 app.include_router(rots.router)
 app.include_router(videos.router)
 app.include_router(internal.router)
+app.include_router(settings.router)
 
 
 @app.on_event("startup")
