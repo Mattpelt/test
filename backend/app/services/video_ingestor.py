@@ -230,6 +230,7 @@ def ingest_gopro_http(serial: str, db: Session) -> None:
         return
 
     media_data = resp.json()
+    logger.info(f"GoPro media/list réponse brute : {media_data}")
     # Format: {"id": "...", "media": [{"d": "100GOPRO", "fs": [{"n": "GX010488.MP4", "s": "...", "cre": timestamp}]}]}
     all_files: list[tuple[str, str, int, int]] = []  # (dossier, nom, taille, cre)
     for entry in media_data.get("media", []):
