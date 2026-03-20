@@ -7,7 +7,7 @@ from app import models  # noqa: F401 — enregistre les modèles auprès de SQLA
 from app.models.settings import Settings
 from app.services.usb_watcher import start_usb_watcher
 from app.services.retention import cleanup_expired_videos
-from app.routers import users, rots, videos, internal, settings
+from app.routers import auth, users, rots, videos, internal, settings
 
 logging.basicConfig(
     level=logging.INFO,
@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="SkyDive Media Hub", version="0.1.0")
 
+app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(rots.router)
 app.include_router(videos.router)

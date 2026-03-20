@@ -134,6 +134,7 @@ else
     # Générer des mots de passe aléatoires
     DB_PASS=$(openssl rand -base64 32 | tr -d '/+=\n' | head -c 28)
     N8N_PASS=$(openssl rand -base64 32 | tr -d '/+=\n' | head -c 28)
+    SECRET_KEY=$(openssl rand -hex 32)
 
     # Demander le chemin de stockage vidéo
     echo ""
@@ -150,6 +151,7 @@ DATABASE_URL=postgresql://skydive:${DB_PASS}@db:5432/skydivemediahub
 VIDEO_STORAGE_PATH=${VIDEO_PATH}
 N8N_USER=admin
 N8N_PASSWORD=${N8N_PASS}
+SECRET_KEY=${SECRET_KEY}
 EOF
 
     log ".env créé"

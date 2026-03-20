@@ -24,9 +24,10 @@ apscheduler==3.10.4
 # Variables d'environnement
 python-dotenv==1.0.1
 
-# Sécurité (hachage des mots de passe)
+# Sécurité (hachage des mots de passe + JWT)
 passlib[bcrypt]==1.7.4
 bcrypt==4.0.1   # passlib 1.7.4 n'est pas compatible avec bcrypt 4.1+
+python-jose[cryptography]==3.3.0
 
 # Validation email (requis par Pydantic EmailStr)
 email-validator==2.1.1

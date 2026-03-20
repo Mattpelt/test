@@ -6,8 +6,10 @@ import pdfplumber
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
+from app.auth import get_current_user, require_admin
 from app.database import get_db
 from app.models.rot import Rot
+from app.models.user import User
 from app.schemas.rot import RotInput, RotResponse
 from app.services.pdf_parser import parse_afifly_pdf
 from app.services.rot_service import persist_rot, upsert_rot
@@ -18,7 +20,7 @@ router = APIRouter(prefix="/rots", tags=["Rotations"])
 
 
 @router.post("/debug-pdf")
-def debug_pdf(file: UploadFile = File(...)):
+def debug_pdf(file: UploadFile = File(...), _: User = Depends(require_admin)):
     """
     Retourne la structure brute pdfplumber du PDF (tables, colonnes, rects).
     Endpoint de diagnostic uniquement — à supprimer en production.
@@ -84,7 +86,7 @@ def debug_pdf(file: UploadFile = File(...)):
 
 
 @router.post("/parse-preview")
-def parse_preview(file: UploadFile = File(...)):
+def parse_preview(file: UploadFile = File(...), _: User = Depends(require_admin)):
     """
     Upload un PDF Afifly et retourne les données parsées SANS les sauvegarder.
     Utile pour valider le parser sur un nouveau PDF avant ingestion réelle.
@@ -117,7 +119,7 @@ def parse_preview(file: UploadFile = File(...)):
 
 
 @router.post("", response_model=RotResponse, status_code=status.HTTP_201_CREATED)
-def create_rot_from_pdf(file: UploadFile = File(...), db: Session = Depends(get_db)):
+def create_rot_from_pdf(file: UploadFile = File(...), db: Session = Depends(get_db), _: User = Depends(require_admin)):
     """
     Upload un PDF Afifly, parse et sauvegarde le rot en base de données.
     Tente également de matcher chaque participant avec un compte utilisateur existant.
@@ -149,7 +151,7 @@ def create_rot_from_pdf(file: UploadFile = File(...), db: Session = Depends(get_
 
 
 @router.post("/json", response_model=RotResponse, status_code=status.HTTP_201_CREATED)
-def create_rot_from_json(payload: RotInput, db: Session = Depends(get_db)):
+def create_rot_from_json(payload: RotInput, db: Session = Depends(get_db), _: User = Depends(require_admin)):
     """
     Crée un rot directement depuis un payload JSON, sans PDF.
 
@@ -191,13 +193,13 @@ def create_rot_from_json(payload: RotInput, db: Session = Depends(get_db)):
 
 
 @router.get("", response_model=list[RotResponse])
-def list_rots(db: Session = Depends(get_db)):
+def list_rots(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     """Retourne toutes les rotations, de la plus récente à la plus ancienne."""
     return db.query(Rot).order_by(Rot.rot_date.desc(), Rot.rot_time.desc()).all()
 
 
 @router.get("/{rot_id}", response_model=RotResponse)
-def get_rot(rot_id: int, db: Session = Depends(get_db)):
+def get_rot(rot_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     """Retourne une rotation."""
     rot = db.query(Rot).filter(Rot.id == rot_id).first()
     if not rot:

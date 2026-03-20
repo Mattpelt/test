@@ -2,8 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.auth import require_admin
 from app.database import get_db
 from app.models.settings import Settings
+from app.models.user import User
 
 router = APIRouter(prefix="/settings", tags=["Configuration"])
 
@@ -28,7 +30,7 @@ class SettingsUpdate(BaseModel):
 
 
 @router.get("", response_model=SettingsResponse)
-def get_settings(db: Session = Depends(get_db)):
+def get_settings(db: Session = Depends(get_db), _: User = Depends(require_admin)):
     """Retourne la configuration actuelle."""
     s = db.query(Settings).first()
     if not s:
@@ -37,7 +39,7 @@ def get_settings(db: Session = Depends(get_db)):
 
 
 @router.patch("", response_model=SettingsResponse)
-def update_settings(payload: SettingsUpdate, db: Session = Depends(get_db)):
+def update_settings(payload: SettingsUpdate, db: Session = Depends(get_db), _: User = Depends(require_admin)):
     """Met à jour un ou plusieurs paramètres de configuration."""
     s = db.query(Settings).first()
     if not s:
