@@ -104,6 +104,34 @@ def _find_user(serial: str, db: Session, usb_serial: str | None = None) -> User 
     return None
 
 
+def _generate_thumbnail(video_path: str) -> str | None:
+    """
+    Extrait une frame à t=5s avec ffmpeg et la sauvegarde en JPEG à côté de la vidéo.
+    Retourne le chemin de la vignette, ou None en cas d'échec.
+    """
+    thumb_path = str(Path(video_path).with_suffix(".jpg"))
+    try:
+        result = subprocess.run(
+            [
+                "ffmpeg", "-y",
+                "-ss", "5",
+                "-i", video_path,
+                "-vframes", "1",
+                "-q:v", "3",
+                "-vf", "scale=480:-1",
+                thumb_path,
+            ],
+            capture_output=True,
+            timeout=30,
+        )
+        if result.returncode == 0 and Path(thumb_path).exists():
+            return thumb_path
+        logger.warning(f"[THUMB] ffmpeg a échoué pour {video_path}: {result.stderr[-200:]}")
+    except Exception as e:
+        logger.warning(f"[THUMB] Erreur génération vignette {video_path}: {e}")
+    return None
+
+
 def _save_video_record(
     db: Session,
     file_name: str,
@@ -116,6 +144,7 @@ def _save_video_record(
     group_id: int | None = None,
 ) -> None:
     suffix = Path(file_name).suffix.upper().lstrip(".")
+    thumbnail_path = _generate_thumbnail(file_path)
     db.add(Video(
         file_name=file_name,
         file_path=file_path,
@@ -126,6 +155,7 @@ def _save_video_record(
         rot_id=rot_id,
         group_id=group_id,
         matching_status="MATCHED" if rot_id else "UNMATCHED",
+        thumbnail_path=thumbnail_path,
         expires_at=datetime.utcnow() + timedelta(days=retention_days),
     ))
 

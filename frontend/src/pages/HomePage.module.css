@@ -549,8 +549,31 @@
 
 .videoItem {
   display: flex;
+  flex-direction: row;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.videoThumb {
+  width: 96px;
+  height: 54px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex-shrink: 0;
+  cursor: pointer;
+  background: #0f172a;
+  border: 1px solid #334155;
+  transition: opacity 0.15s;
+}
+
+.videoThumb:hover { opacity: 0.8; }
+
+.videoInfo {
+  display: flex;
   flex-direction: column;
   gap: 0.2rem;
+  flex: 1;
+  min-width: 0;
 }
 
 .videoName {
@@ -564,21 +587,101 @@
   color: #64748b;
 }
 
-.downloadBtn {
-  align-self: flex-start;
-  background: #0f3460;
+.videoActions {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.2rem;
+}
+
+.previewBtn {
+  background: #1e293b;
+  border: 1px solid #334155;
   border-radius: 4px;
-  color: #60a5fa;
+  color: #94a3b8;
+  cursor: pointer;
   font-size: 0.75rem;
   font-weight: 500;
   padding: 0.25rem 0.6rem;
-  text-decoration: none;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.previewBtn:hover { border-color: #60a5fa; color: #60a5fa; }
+
+.downloadBtn {
+  background: #0f3460;
+  border: none;
+  border-radius: 4px;
+  color: #60a5fa;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.25rem 0.6rem;
   transition: background 0.15s;
 }
 
 .downloadBtn:hover {
   background: #1e40af;
   color: #bfdbfe;
+}
+
+/* ── Lecteur vidéo ── */
+.playerOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: 1rem;
+}
+
+.playerModal {
+  background: #0f172a;
+  border-radius: 12px;
+  border: 1px solid #334155;
+  width: 100%;
+  max-width: 960px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.playerHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #1e293b;
+}
+
+.playerTitle {
+  color: #94a3b8;
+  font-size: 0.8rem;
+  font-family: monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playerClose {
+  background: none;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0.25rem;
+  flex-shrink: 0;
+  transition: color 0.15s;
+}
+
+.playerClose:hover { color: #f1f5f9; }
+
+.playerVideo {
+  width: 100%;
+  max-height: 75vh;
+  background: #000;
+  display: block;
 }
 
 /* ── Groups list in rot table ── */

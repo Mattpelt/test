@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api/client'
 import styles from './HomePage.module.css'
@@ -6,6 +6,7 @@ import GestionTab from '../components/GestionTab'
 import ProfileTab from '../components/ProfileTab'
 
 export default function HomePage() {
+  const [previewVideo, setPreviewVideo] = useState(null) // {id, file_name}
   const { user, logout } = useAuth()
   const tabs = [
     'Mes vidéos',
@@ -36,8 +37,12 @@ export default function HomePage() {
         ))}
       </div>
 
+      {previewVideo && (
+        <VideoPlayerModal video={previewVideo} onClose={() => setPreviewVideo(null)} />
+      )}
+
       <main className={styles.main}>
-        {tab === 'Mes vidéos'  && <MyVideosTab />}
+        {tab === 'Mes vidéos'  && <MyVideosTab onPreview={setPreviewVideo} />}
         {tab === 'Mon compte'  && <ProfileTab />}
         {tab === 'Gestion'     && <GestionTab />}
         {tab === 'Paramètres'  && <SettingsTab />}
@@ -49,7 +54,7 @@ export default function HomePage() {
 /* ─────────────────────────────────────────────────
    Onglet Mes vidéos
 ───────────────────────────────────────────────── */
-function MyVideosTab() {
+function MyVideosTab({ onPreview }) {
   const { user } = useAuth()
   const [rots, setRots] = useState([])
   const [videosByRot, setVideosByRot] = useState({})
@@ -142,19 +147,35 @@ function MyVideosTab() {
                       <ul className={styles.videoList}>
                         {memberVideos.map(video => (
                           <li key={video.id} className={styles.videoItem}>
-                            <span className={styles.videoName}>{video.file_name}</span>
-                            <span className={styles.videoMeta}>
-                              {video.file_format}
-                              {video.file_size_bytes ? ` · ${formatSize(video.file_size_bytes)}` : ''}
-                            </span>
-                            <a
-                              href={`/api/videos/${video.id}/download`}
-                              className={styles.downloadBtn}
-                              download
-                              onClick={e => { e.preventDefault(); downloadVideo(video.id, video.file_name) }}
-                            >
-                              Télécharger
-                            </a>
+                            {video.thumbnail_path && (
+                              <img
+                                src={`/api/videos/${video.id}/thumbnail?token=${encodeURIComponent(localStorage.getItem('token'))}`}
+                                className={styles.videoThumb}
+                                alt=""
+                                onClick={() => onPreview(video)}
+                              />
+                            )}
+                            <div className={styles.videoInfo}>
+                              <span className={styles.videoName}>{video.file_name}</span>
+                              <span className={styles.videoMeta}>
+                                {video.file_format}
+                                {video.file_size_bytes ? ` · ${formatSize(video.file_size_bytes)}` : ''}
+                              </span>
+                              <div className={styles.videoActions}>
+                                <button
+                                  className={styles.previewBtn}
+                                  onClick={() => onPreview(video)}
+                                >
+                                  Aperçu
+                                </button>
+                                <button
+                                  className={styles.downloadBtn}
+                                  onClick={() => downloadVideo(video.id, video.file_name)}
+                                >
+                                  Télécharger
+                                </button>
+                              </div>
+                            </div>
                           </li>
                         ))}
                       </ul>
@@ -288,6 +309,40 @@ function SettingField({ label, hint, value, unit, onChange }) {
       <div className={styles.settingInput}>
         <input type="number" min={1} value={value} onChange={onChange} className={styles.numInput} />
         <span className={styles.unit}>{unit}</span>
+      </div>
+    </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────
+   Lecteur vidéo
+───────────────────────────────────────────────── */
+function VideoPlayerModal({ video, onClose }) {
+  const token = localStorage.getItem('token')
+  const videoRef = useRef(null)
+
+  // Fermer avec Echap
+  useEffect(() => {
+    function onKey(e) { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div className={styles.playerOverlay} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className={styles.playerModal}>
+        <div className={styles.playerHeader}>
+          <span className={styles.playerTitle}>{video.file_name}</span>
+          <button className={styles.playerClose} onClick={onClose}>✕</button>
+        </div>
+        <video
+          ref={videoRef}
+          className={styles.playerVideo}
+          src={`/api/videos/${video.id}/stream?token=${encodeURIComponent(token)}`}
+          controls
+          autoPlay
+          playsInline
+        />
       </div>
     </div>
   )

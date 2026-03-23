@@ -18,6 +18,7 @@ class VideoResponse(BaseModel):
     rot_id:           int | None
     group_id:         int | None
     matching_status:  str
+    thumbnail_path:   str | None
     ingested_at:      datetime
     expires_at:       datetime
 

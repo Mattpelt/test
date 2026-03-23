@@ -16,5 +16,6 @@ class Video(Base):
     rot_id           = Column(Integer, ForeignKey("rots.id"), nullable=True)   # NULL si non matché
     group_id         = Column(Integer, nullable=True)              # groupe dans le rot
     matching_status  = Column(String, default="UNMATCHED")         # MATCHED / AMBIGUOUS / UNMATCHED
+    thumbnail_path   = Column(String, nullable=True)               # chemin vers la vignette JPEG
     ingested_at      = Column(DateTime, default=datetime.utcnow)
     expires_at       = Column(DateTime)                            # calculé à l'ingestion selon rétention

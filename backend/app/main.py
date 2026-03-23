@@ -74,6 +74,8 @@ def _migrate():
         "ALTER TABLE settings ADD COLUMN IF NOT EXISTS smtp_user VARCHAR",
         "ALTER TABLE settings ADD COLUMN IF NOT EXISTS smtp_password VARCHAR",
         "ALTER TABLE settings ADD COLUMN IF NOT EXISTS smtp_from VARCHAR",
+        # Vignettes vidéo
+        "ALTER TABLE videos ADD COLUMN IF NOT EXISTS thumbnail_path VARCHAR",
         # Authentification par PIN
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS pin_lookup_hash VARCHAR",
         "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_pin_lookup_hash ON users (pin_lookup_hash) WHERE pin_lookup_hash IS NOT NULL",
