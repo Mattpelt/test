@@ -23,7 +23,6 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
 )
-logging.getLogger("uvicorn.access").addFilter(_SuppressPolling())
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +38,10 @@ app.include_router(settings.router)
 
 @app.on_event("startup")
 def on_startup():
+    # Doit être ici : uvicorn configure ses loggers avant le startup, pas avant l'import
+    for handler in logging.getLogger("uvicorn.access").handlers:
+        handler.addFilter(_SuppressPolling())
+    logging.getLogger("uvicorn.access").addFilter(_SuppressPolling())
     """Au démarrage : création des tables, migrations, settings par défaut, surveillant USB."""
     logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     logger.info("  SkyDive Media Hub — Démarrage")
