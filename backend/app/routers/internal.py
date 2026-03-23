@@ -77,12 +77,23 @@ def camera_connected(event: CameraEvent):
         f"device_node: {event.device_node} | model: {event.model_name}"
     )
 
+    from app.models.camera import Camera
+
     db = SessionLocal()
     try:
         user = db.query(User).filter(
             User.camera_serials.contains([event.serial]),
             User.is_active == True,
         ).first()
+        # Enrichir le model_name depuis la table cameras si disponible
+        cam_record = db.query(Camera).filter(Camera.serial == event.serial).first()
+        if cam_record is None and event.vendor_id == "2672":
+            # GoPro : chercher aussi via usb_serial si le serial n'est pas encore connu
+            cam_record = db.query(Camera).filter(Camera.usb_serial == event.serial).first()
+        if cam_record and (cam_record.make or cam_record.model):
+            enriched_model = " ".join(filter(None, [cam_record.make, cam_record.model]))
+        else:
+            enriched_model = _vendor_display(event.vendor_id, event.model_name)
     finally:
         db.close()
 
@@ -95,7 +106,7 @@ def camera_connected(event: CameraEvent):
                 "mtp":         event.mtp,
                 "vendor_id":   event.vendor_id,
                 "device_node": event.device_node,
-                "model_name":  _vendor_display(event.vendor_id, event.model_name),
+                "model_name":  enriched_model,
                 "connected_at": datetime.now(timezone.utc).isoformat(),
             })
         return {"status": "onboarding_required", "serial": event.serial}

@@ -12,6 +12,7 @@ import gphoto2 as gp
 import requests
 from sqlalchemy.orm import Session
 
+from app.models.camera import Camera
 from app.models.settings import Settings
 from app.models.user import User
 from app.models.video import Video
@@ -36,19 +37,71 @@ def _get_settings(db: Session) -> tuple[int, str]:
     return retention_days, storage_path
 
 
-def _find_user(serial: str, db: Session) -> User | None:
-    """Recherche le propriétaire d'une caméra par son numéro de série."""
+def _parse_model_string(model_str: str | None) -> tuple[str | None, str | None]:
+    """Sépare 'GoPro HERO12 Black' en ('GoPro', 'HERO12 Black')."""
+    if not model_str:
+        return None, None
+    for make in ("GoPro", "Insta360", "Sony", "DJI", "Garmin", "Olympus"):
+        if model_str.startswith(make):
+            model = model_str[len(make):].strip() or None
+            return make, model
+    return None, model_str
+
+
+def _upsert_camera(
+    db: Session,
+    serial: str,
+    make: str | None = None,
+    model: str | None = None,
+    usb_serial: str | None = None,
+    vendor_id: str | None = None,
+) -> None:
+    """Crée ou met à jour l'enregistrement d'une caméra dans la table cameras."""
+    cam = db.query(Camera).filter(Camera.serial == serial).first()
+    if cam:
+        if make:       cam.make       = make
+        if model:      cam.model      = model
+        if usb_serial: cam.usb_serial = usb_serial
+        if vendor_id:  cam.vendor_id  = vendor_id
+        cam.updated_at = datetime.utcnow()
+    else:
+        db.add(Camera(serial=serial, make=make, model=model,
+                      usb_serial=usb_serial, vendor_id=vendor_id))
+
+
+def _find_user(serial: str, db: Session, usb_serial: str | None = None) -> User | None:
+    """
+    Recherche le propriétaire d'une caméra par son numéro de série.
+    Si le vrai serial (extrait des métadonnées) ne trouve rien, retente avec le
+    serial USB brut (cas Insta360 "0001"), et met à jour camera_serials si trouvé.
+    """
     user = (
         db.query(User)
         .filter(User.camera_serials.contains([serial]), User.is_active == True)
         .first()
     )
-    if not user:
-        logger.warning(
-            f"Numéro de série inconnu : {serial}. "
-            "Aucun compte associé — onboarding requis."
+    if user:
+        return user
+
+    # Fallback : serial USB brut (ex. "0001" pour Insta360 Mass Storage)
+    if usb_serial and usb_serial != serial:
+        user = (
+            db.query(User)
+            .filter(User.camera_serials.contains([usb_serial]), User.is_active == True)
+            .first()
         )
-    return user
+        if user:
+            # Remplacer l'USB serial générique par le vrai serial dans le compte
+            user.camera_serials = [serial if s == usb_serial else s for s in user.camera_serials]
+            db.flush()
+            logger.info(f"Serial mis à jour : {usb_serial} → {serial} (user id={user.id})")
+            return user
+
+    logger.warning(
+        f"Numéro de série inconnu : {serial}. "
+        "Aucun compte associé — onboarding requis."
+    )
+    return None
 
 
 def _save_video_record(
@@ -81,11 +134,12 @@ def _save_video_record(
 # Path 1 : block device (SD card / mass storage)
 # ---------------------------------------------------------------------------
 
-def _extract_insv_serial(mount_path: str) -> str | None:
+def _extract_insv_camera_info(mount_path: str) -> tuple[str | None, str | None, str | None]:
     """
-    Extrait le numéro de série unique depuis les métadonnées binaires d'un fichier .insv.
-    Le serial Insta360 (ex: IAHEA25107V6YG) apparaît dans les 100 derniers Ko du fichier,
-    dans les 50 octets qui précèdent la chaîne 'Insta360'.
+    Extrait (serial, make, model) depuis les métadonnées binaires d'un fichier .insv.
+    - serial : ex "IAHEA25107V6YG" (50 octets avant la chaîne 'Insta360')
+    - make   : "Insta360"
+    - model  : ex "X5", "X4", "ONE RS"… (octets après 'Insta360')
     """
     for root, _, files in os.walk(mount_path):
         for file in files:
@@ -97,16 +151,22 @@ def _extract_insv_serial(mount_path: str) -> str | None:
                         data = f.read()
                     pos = data.find(b"Insta360")
                     if pos > 10:
+                        # Serial : dans les 50 octets qui précèdent "Insta360"
                         prefix = data[max(0, pos - 50): pos]
-                        match = re.search(rb"([A-Z][A-Z0-9]{9,19})", prefix)
-                        if match:
-                            serial = match.group(1).decode("ascii")
-                            logger.info(f"Serial .insv extrait : {serial}")
-                            return serial
-                    logger.warning(f"Chaîne 'Insta360' non trouvée dans {file}")
+                        serial_match = re.search(rb"([A-Z][A-Z0-9]{9,19})", prefix)
+                        serial = serial_match.group(1).decode("ascii") if serial_match else None
+
+                        # Modèle : juste après "Insta360" (ex: " X5\x00" ou " ONE RS\x00")
+                        suffix = data[pos + 8: pos + 32]
+                        model_match = re.search(rb"\s+([A-Z0-9][A-Z0-9 ]{1,14}?)(?:\x00|[\x80-\xff])", suffix)
+                        model = model_match.group(1).decode("ascii").strip() if model_match else None
+
+                        logger.info(f"[INSV] serial={serial}, model={model}")
+                        return serial, "Insta360", model
+                    logger.warning(f"'Insta360' non trouvé dans {file}")
                 except Exception as e:
                     logger.warning(f"Erreur lecture métadonnées {file} : {e}")
-    return None
+    return None, None, None
 
 
 def _find_videos(mount_path: str) -> list[Path]:
@@ -150,16 +210,22 @@ def ingest_device(device_node: str, serial: str, db: Session) -> None:
             return
 
     try:
-        # Extraction du serial réel depuis les métadonnées .insv (Insta360)
-        # Doit précéder le lookup utilisateur car le serial USB peut être générique
-        real_serial = _extract_insv_serial(mount_point)
-        if real_serial:
-            logger.info(f"[INGEST][Block] Serial corrigé depuis métadonnées .insv : {real_serial} (USB brut : {serial})")
-            serial = real_serial
+        # Extraction du serial réel + make/model depuis les métadonnées .insv (Insta360)
+        # Doit précéder le lookup utilisateur car le serial USB peut être générique ("0001")
+        usb_serial = serial
+        insv_serial, insv_make, insv_model = _extract_insv_camera_info(mount_point)
+        if insv_serial:
+            logger.info(f"[INGEST][Block] Serial corrigé depuis métadonnées .insv : {insv_serial} (USB brut : {usb_serial})")
+            serial = insv_serial
 
-        user = _find_user(serial, db)
+        user = _find_user(serial, db, usb_serial=usb_serial)
         if not user:
             return
+
+        # Enregistrer / mettre à jour les métadonnées de la caméra
+        make = insv_make
+        model = insv_model
+        _upsert_camera(db, serial, make=make, model=model, usb_serial=usb_serial)
 
         logger.info(f"[INGEST][Block] ━━━ Début ingestion — {user.first_name} {user.last_name} | serial: {serial} ━━━")
         video_files = _find_videos(mount_point)
@@ -247,6 +313,7 @@ def ingest_gopro_http(serial: str, db: Session) -> None:
 
     # Laisser le temps à l'interface USB NCM d'être configurée
     logger.info("[INGEST][GoPro] Attente interface USB NCM (5s)...")
+
     time.sleep(5)
 
     # Activer le wired USB control mode (requis sur HERO11 pour accéder aux médias)
@@ -257,6 +324,21 @@ def ingest_gopro_http(serial: str, db: Session) -> None:
         logger.warning(f"[INGEST][GoPro] Wired USB control — erreur (non bloquant) : {e}")
 
     time.sleep(2)
+
+    # Récupérer le modèle GoPro via l'API info
+    try:
+        info_resp = requests.get(f"{GOPRO_BASE_URL}/gopro/camera/info", timeout=10)
+        if info_resp.ok:
+            info_data = info_resp.json()
+            gopro_model = info_data.get("info", {}).get("model_name") or info_data.get("model_name")
+            make, model = _parse_model_string(gopro_model)
+            if not make:
+                make = "GoPro"
+            _upsert_camera(db, serial, make=make, model=model, vendor_id="2672")
+            logger.info(f"[INGEST][GoPro] Caméra : {make} {model or ''} | serial: {serial}")
+    except requests.RequestException as e:
+        logger.warning(f"[INGEST][GoPro] Impossible de récupérer le modèle caméra : {e}")
+        _upsert_camera(db, serial, make="GoPro", vendor_id="2672")
 
     # La GoPro peut retourner une liste vide si le serveur média n'est pas encore prêt
     # → on retente jusqu'à 5 fois avec 5s d'intervalle
@@ -398,6 +480,15 @@ def ingest_mtp_device(serial: str, db: Session) -> None:
         return
 
     try:
+        # Récupérer make/model depuis gphoto2
+        try:
+            abilities = camera.get_abilities()
+            make, model = _parse_model_string(abilities.model)
+            _upsert_camera(db, serial, make=make, model=model)
+            logger.info(f"[INGEST][MTP] Caméra : {make or ''} {model or ''} | serial: {serial}")
+        except Exception as e:
+            logger.warning(f"[INGEST][MTP] Impossible de lire les abilities caméra : {e}")
+
         logger.info(f"[INGEST][MTP] ━━━ Début ingestion — {user.first_name} {user.last_name} | serial: {serial} ━━━")
         video_files = _list_mtp_videos(camera)
         logger.info(f"[INGEST][MTP] {len(video_files)} vidéo(s) trouvée(s) sur la caméra")

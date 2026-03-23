@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import create_access_token, pin_to_lookup_hash, require_admin
 from app.database import get_db
+from app.models.camera import Camera
 from app.models.rot_participant import RotParticipant
 from app.models.user import User
 from app.models.video import Video
@@ -167,6 +168,21 @@ def update_me(payload: UserSelfUpdate, db: Session = Depends(get_db), current_us
     db.commit()
     db.refresh(current_user)
     return current_user
+
+
+@router.get("/me/cameras")
+def get_my_cameras(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Retourne les caméras associées avec make/model depuis la table cameras."""
+    result = []
+    for serial in current_user.camera_serials:
+        cam = db.query(Camera).filter(Camera.serial == serial).first()
+        result.append({
+            "serial": serial,
+            "make": cam.make if cam else None,
+            "model": cam.model if cam else None,
+            "usb_serial": cam.usb_serial if cam else None,
+        })
+    return result
 
 
 @router.delete("/me/cameras/{serial}", response_model=UserResponse)

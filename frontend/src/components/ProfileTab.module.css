@@ -176,11 +176,23 @@
   animation: pulse 2s ease-in-out infinite;
 }
 
-.cameraSerial {
-  color: #e2e8f0;
-  font-family: monospace;
-  font-size: 0.875rem;
+.cameraInfo {
+  display: flex;
+  flex-direction: column;
   flex: 1;
+  gap: 0.1rem;
+}
+
+.cameraModel {
+  color: #e2e8f0;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.cameraSerial {
+  color: #64748b;
+  font-family: monospace;
+  font-size: 0.78rem;
 }
 
 /* ── Caméras détectées (pending) ── */

@@ -165,11 +165,22 @@ function ProfileForm({ profile, onSaved }) {
    Gestion des caméras
 ───────────────────────────────────────────────── */
 function CameraManager({ profile, onChanged }) {
+  const [myCameras, setMyCameras]           = useState([]) // [{serial, make, model}]
   const [pendingCameras, setPendingCameras] = useState([])
   const [manualSerial, setManualSerial]     = useState('')
   const [error, setError]                   = useState('')
   const [claiming, setClaiming]             = useState(null) // serial en cours
   const pollRef = useRef(null)
+
+  // Charger les caméras enrichies
+  async function loadMyCameras() {
+    try {
+      const { data } = await api.get('/users/me/cameras')
+      setMyCameras(data)
+    } catch { /* silencieux */ }
+  }
+
+  useEffect(() => { loadMyCameras() }, [profile.camera_serials])
 
   // Polling des caméras détectées
   useEffect(() => {
@@ -235,13 +246,29 @@ function CameraManager({ profile, onChanged }) {
         <p className={pStyles.empty}>Aucune caméra associée à votre compte.</p>
       ) : (
         <ul className={pStyles.cameraList}>
-          {profile.camera_serials.map(serial => (
-            <li key={serial} className={pStyles.cameraItem}>
-              <span className={pStyles.cameraLed} />
-              <span className={pStyles.cameraSerial}>{serial}</span>
-              <button className={pStyles.removeBtn} onClick={() => remove(serial)}>Retirer</button>
-            </li>
-          ))}
+          {myCameras.length > 0
+            ? myCameras.map(cam => (
+                <li key={cam.serial} className={pStyles.cameraItem}>
+                  <span className={pStyles.cameraLed} />
+                  <span className={pStyles.cameraInfo}>
+                    {cam.make || cam.model
+                      ? <span className={pStyles.cameraModel}>{[cam.make, cam.model].filter(Boolean).join(' ')}</span>
+                      : null}
+                    <span className={pStyles.cameraSerial}>{cam.serial}</span>
+                  </span>
+                  <button className={pStyles.removeBtn} onClick={() => remove(cam.serial)}>Retirer</button>
+                </li>
+              ))
+            : profile.camera_serials.map(serial => (
+                <li key={serial} className={pStyles.cameraItem}>
+                  <span className={pStyles.cameraLed} />
+                  <span className={pStyles.cameraInfo}>
+                    <span className={pStyles.cameraSerial}>{serial}</span>
+                  </span>
+                  <button className={pStyles.removeBtn} onClick={() => remove(serial)}>Retirer</button>
+                </li>
+              ))
+          }
         </ul>
       )}
 
