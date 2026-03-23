@@ -150,15 +150,53 @@
   padding: 2rem 1.5rem;
 }
 
+/* ── Barre d'outils vidéos (recherche + toggle) ── */
+.videoToolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.searchInput {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  color: #f1f5f9;
+  font-size: 0.875rem;
+  outline: none;
+  padding: 0.45rem 0.875rem;
+  transition: border-color 0.15s;
+  width: 280px;
+}
+
+.searchInput:focus { border-color: #3b82f6; }
+.searchInput::placeholder { color: #475569; }
+
+.searchCount {
+  color: #64748b;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.searchEmpty {
+  color: #64748b;
+  font-size: 0.875rem;
+  font-style: italic;
+  padding: 2rem;
+  text-align: center;
+}
+
 /* ── Vue toggle (Par rotation / Liste) ── */
 .viewToggleBar {
   display: flex;
   gap: 0;
-  margin-bottom: 1.5rem;
   border: 1px solid #334155;
   border-radius: 8px;
   overflow: hidden;
   width: fit-content;
+  margin-left: auto;
 }
 
 .viewToggleBtn {

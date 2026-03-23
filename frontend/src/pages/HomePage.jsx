@@ -61,6 +61,7 @@ function MyVideosTab({ onPreview }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [view, setView] = useState('rot') // 'rot' | 'list'
+  const [search, setSearch] = useState('')
 
   useEffect(() => {
     async function load() {
@@ -97,6 +98,14 @@ function MyVideosTab({ onPreview }) {
     return `${(bytes / 1e6).toFixed(0)} Mo`
   }
 
+  // Filtrage : chaque terme doit correspondre à au moins un participant
+  const terms = search.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  const filteredRots = terms.length === 0 ? rots : rots.filter(rot =>
+    terms.every(term =>
+      rot.participants.some(p => p.afifly_name?.toLowerCase().includes(term))
+    )
+  )
+
   if (loading) return <p className={styles.info}>Chargement…</p>
   if (error)   return <p className={styles.errorMsg}>{error}</p>
 
@@ -111,26 +120,44 @@ function MyVideosTab({ onPreview }) {
 
   return (
     <div>
-      <div className={styles.viewToggleBar}>
-        <button
-          className={`${styles.viewToggleBtn} ${view === 'rot' ? styles.viewToggleActive : ''}`}
-          onClick={() => setView('rot')}
-        >
-          Par rotation
-        </button>
-        <button
-          className={`${styles.viewToggleBtn} ${view === 'list' ? styles.viewToggleActive : ''}`}
-          onClick={() => setView('list')}
-        >
-          Liste
-        </button>
+      <div className={styles.videoToolbar}>
+        <input
+          className={styles.searchInput}
+          type="search"
+          placeholder="Filtrer par nom de sautant…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
+        {terms.length > 0 && (
+          <span className={styles.searchCount}>
+            {filteredRots.length} rotation{filteredRots.length !== 1 ? 's' : ''}
+          </span>
+        )}
+        <div className={styles.viewToggleBar}>
+          <button
+            className={`${styles.viewToggleBtn} ${view === 'rot' ? styles.viewToggleActive : ''}`}
+            onClick={() => setView('rot')}
+          >
+            Par rotation
+          </button>
+          <button
+            className={`${styles.viewToggleBtn} ${view === 'list' ? styles.viewToggleActive : ''}`}
+            onClick={() => setView('list')}
+          >
+            Liste
+          </button>
+        </div>
       </div>
 
       {view === 'list' && (
-        <VideoListView rots={rots} videosByRot={videosByRot} onPreview={onPreview} currentUserId={user.id} />
+        <VideoListView rots={filteredRots} videosByRot={videosByRot} onPreview={onPreview} currentUserId={user.id} />
       )}
 
-      {view === 'rot' && <div className={styles.videoContent}>{rots.map(rot => {
+      {filteredRots.length === 0 && terms.length > 0 && (
+        <p className={styles.searchEmpty}>Aucune rotation ne correspond à votre recherche.</p>
+      )}
+
+      {view === 'rot' && <div className={styles.videoContent}>{filteredRots.map(rot => {
         const myParticipant = rot.participants.find(p => p.user_id === user.id)
         const myGroupId = myParticipant?.group_id
         const groupMembers = rot.participants
