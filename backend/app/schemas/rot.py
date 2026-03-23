@@ -2,6 +2,16 @@ from datetime import date, datetime, time
 from pydantic import BaseModel
 
 
+class RotUpdate(BaseModel):
+    """Mise à jour partielle d'un rot (admin uniquement)."""
+    rot_number:         int | None = None
+    rot_date:           date | None = None
+    rot_time:           time | None = None
+    plane_registration: str | None = None
+    pilot:              str | None = None
+    chef_avion:         str | None = None
+
+
 class RotParticipantInput(BaseModel):
     afifly_name:  str
     level:        str | None = None

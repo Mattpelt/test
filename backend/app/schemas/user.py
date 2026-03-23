@@ -22,6 +22,18 @@ class OnboardingRequest(BaseModel):
     camera_serial:   str | None = None  # serial détecté automatiquement
 
 
+class UserUpdate(BaseModel):
+    """Mise à jour partielle d'un utilisateur (admin uniquement)."""
+    first_name:     str | None = None
+    last_name:      str | None = None
+    email:          str | None = None
+    afifly_name:    str | None = None
+    pin:            str | None = None
+    camera_serials: list[str] | None = None
+    is_admin:       bool | None = None
+    is_active:      bool | None = None
+
+
 class UserUpdateCameras(BaseModel):
     """Mise à jour des caméras associées à un sautant."""
     camera_serials: list[str]

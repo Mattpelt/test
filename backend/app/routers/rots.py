@@ -10,8 +10,9 @@ from app.auth import get_current_user, require_admin
 from app.database import get_db
 from app.models.rot import Rot
 from app.models.rot_participant import RotParticipant
+from app.models.video import Video
 from app.models.user import User
-from app.schemas.rot import RotDetailResponse, RotInput, RotResponse
+from app.schemas.rot import RotDetailResponse, RotInput, RotResponse, RotUpdate
 from app.services.pdf_parser import parse_afifly_pdf
 from app.services.rot_service import persist_rot, upsert_rot
 
@@ -230,3 +231,28 @@ def get_rot(rot_id: int, db: Session = Depends(get_db), _: User = Depends(get_cu
     if not rot:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rot introuvable.")
     return rot
+
+
+@router.patch("/{rot_id}", response_model=RotResponse)
+def update_rot(rot_id: int, payload: RotUpdate, db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    """Met à jour les métadonnées d'une rotation (réservé à l'admin)."""
+    rot = db.query(Rot).filter(Rot.id == rot_id).first()
+    if not rot:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rot introuvable.")
+    for field, val in payload.model_dump(exclude_none=True).items():
+        setattr(rot, field, val)
+    db.commit()
+    db.refresh(rot)
+    return rot
+
+
+@router.delete("/{rot_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_rot(rot_id: int, db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    """Supprime une rotation (cascade : vidéos déliées, participants supprimés)."""
+    rot = db.query(Rot).filter(Rot.id == rot_id).first()
+    if not rot:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rot introuvable.")
+    db.query(Video).filter(Video.rot_id == rot_id).update({"rot_id": None, "matching_status": "UNMATCHED"})
+    db.query(RotParticipant).filter(RotParticipant.rot_id == rot_id).delete()
+    db.delete(rot)
+    db.commit()

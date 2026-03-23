@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.auth import create_access_token, pin_to_lookup_hash, require_admin
 from app.database import get_db
 from app.models.user import User
-from app.schemas.user import OnboardingRequest, UserCreate, UserResponse, UserUpdateCameras
+from app.schemas.user import OnboardingRequest, UserCreate, UserResponse, UserUpdate, UserUpdateCameras
 
 router = APIRouter(prefix="/users", tags=["Utilisateurs"])
 logger = logging.getLogger(__name__)
@@ -144,6 +144,40 @@ def get_user(user_id: int, db: Session = Depends(get_db), _: User = Depends(requ
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sautant introuvable.")
+    return user
+
+
+@router.patch("/{user_id}", response_model=UserResponse)
+def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    """Met à jour un compte sautant (réservé à l'admin)."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sautant introuvable.")
+    if payload.first_name is not None:
+        user.first_name = payload.first_name
+    if payload.last_name is not None:
+        user.last_name = payload.last_name
+    if payload.email is not None:
+        if payload.email and db.query(User).filter(User.email == payload.email, User.id != user_id).first():
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email déjà utilisé.")
+        user.email = payload.email or None
+    if payload.afifly_name is not None:
+        user.afifly_name = payload.afifly_name or None
+    if payload.camera_serials is not None:
+        user.camera_serials = payload.camera_serials
+    if payload.is_active is not None:
+        user.is_active = payload.is_active
+    if payload.is_admin is not None:
+        user.is_admin = payload.is_admin
+    if payload.pin is not None:
+        effective_admin = payload.is_admin if payload.is_admin is not None else user.is_admin
+        _validate_pin(payload.pin, effective_admin)
+        lookup = pin_to_lookup_hash(payload.pin)
+        _pin_unique(lookup, db, exclude_id=user_id)
+        user.pin_lookup_hash = lookup
+    db.commit()
+    db.refresh(user)
+    logger.info(f"[USERS] Compte mis à jour par admin : id={user_id}")
     return user
 
 

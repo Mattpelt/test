@@ -2,6 +2,11 @@ from datetime import datetime
 from pydantic import BaseModel
 
 
+class VideoUpdate(BaseModel):
+    owner_id: int | None = None
+    rot_id:   int | None = None
+
+
 class VideoResponse(BaseModel):
     id:               int
     file_name:        str

@@ -1,12 +1,9 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 
-// Pages (à implémenter — Sprint 3)
 import LoginPage from './pages/LoginPage'
 import HomePage from './pages/HomePage'
-import AdminPage from './pages/AdminPage'
 import OnboardingPage from './pages/OnboardingPage'
 import PrivateRoute from './components/PrivateRoute'
-import AdminRoute from './components/AdminRoute'
 
 export default function App() {
   return (
@@ -17,11 +14,6 @@ export default function App() {
       {/* Routes protégées — utilisateur connecté */}
       <Route element={<PrivateRoute />}>
         <Route path="/" element={<HomePage />} />
-      </Route>
-
-      {/* Routes admin */}
-      <Route element={<AdminRoute />}>
-        <Route path="/admin" element={<AdminPage />} />
       </Route>
 
       {/* Toute autre URL → accueil */}
