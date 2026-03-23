@@ -1,38 +1,135 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from passlib.context import CryptContext
 
-from app.auth import require_admin
+from app.auth import create_access_token, pin_to_lookup_hash, require_admin
 from app.database import get_db
 from app.models.user import User
-from app.schemas.user import UserCreate, UserResponse, UserUpdateCameras
+from app.schemas.user import OnboardingRequest, UserCreate, UserResponse, UserUpdateCameras
 
 router = APIRouter(prefix="/users", tags=["Utilisateurs"])
+logger = logging.getLogger(__name__)
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def _validate_pin(pin: str, is_admin: bool) -> None:
+    """Valide le format du PIN : 4 chiffres pour sautant, 6 pour admin."""
+    expected = 6 if is_admin else 4
+    if not pin.isdigit() or len(pin) != expected:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Le PIN doit contenir exactement {expected} chiffres.",
+        )
+
+
+def _pin_unique(pin_hash: str, db: Session, exclude_id: int | None = None) -> None:
+    """Vérifie que le PIN n'est pas déjà utilisé."""
+    q = db.query(User).filter(User.pin_lookup_hash == pin_hash)
+    if exclude_id:
+        q = q.filter(User.id != exclude_id)
+    if q.first():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ce PIN est déjà utilisé par un autre compte.",
+        )
 
 
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def create_user(payload: UserCreate, db: Session = Depends(get_db), _: User = Depends(require_admin)):
-    """Crée un nouveau compte sautant."""
-    if db.query(User).filter(User.email == payload.email).first():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Un compte avec cet email existe déjà.",
-        )
+    """Crée un compte sautant (réservé à l'admin)."""
+    _validate_pin(payload.pin, payload.is_admin)
+    if payload.email and db.query(User).filter(User.email == payload.email).first():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email déjà utilisé.")
+    lookup = pin_to_lookup_hash(payload.pin)
+    _pin_unique(lookup, db)
     user = User(
         first_name=payload.first_name,
         last_name=payload.last_name,
-        email=payload.email,
-        password_hash=pwd_context.hash(payload.password),
-        afifly_name=payload.afifly_name,
+        email=payload.email or None,
+        pin_lookup_hash=lookup,
+        afifly_name=payload.afifly_name or None,
         camera_serials=[],
         is_admin=payload.is_admin,
     )
     db.add(user)
     db.commit()
     db.refresh(user)
+    logger.info(f"[USERS] Compte créé par admin : {user.first_name} {user.last_name} (id={user.id})")
     return user
+
+
+@router.post("/onboard", response_model=dict, status_code=status.HTTP_201_CREATED)
+def onboard(payload: OnboardingRequest, db: Session = Depends(get_db)):
+    """
+    Crée un compte depuis le kiosque (self-service, sans authentification).
+    PIN : exactement 4 chiffres.
+    Si un serial caméra est fourni, il est associé au compte et l'ingestion démarre.
+    """
+    from app.routers.internal import clear_pending_onboarding, get_pending_onboarding
+    from app.services.video_ingestor import ingest_device, ingest_gopro_http, ingest_mtp_device
+    import threading
+
+    _validate_pin(payload.pin, is_admin=False)
+    if payload.email and db.query(User).filter(User.email == payload.email).first():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email déjà utilisé.")
+    lookup = pin_to_lookup_hash(payload.pin)
+    _pin_unique(lookup, db)
+
+    serial = payload.camera_serial
+    user = User(
+        first_name=payload.first_name,
+        last_name=payload.last_name,
+        email=payload.email or None,
+        pin_lookup_hash=lookup,
+        afifly_name=payload.afifly_name or None,
+        camera_serials=[serial] if serial else [],
+        is_admin=False,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    logger.info(f"[ONBOARDING] Compte créé : {user.first_name} {user.last_name} (id={user.id}, serial={serial})")
+
+    # Lancer l'ingestion en arrière-plan si un serial est associé
+    if serial:
+        pending = get_pending_onboarding()
+        if pending and pending.get("serial") == serial:
+            mtp = pending.get("mtp", False)
+            vendor_id = pending.get("vendor_id")
+            device_node = pending.get("device_node")
+
+            def run_ingestion():
+                from app.database import SessionLocal
+                idb = SessionLocal()
+                try:
+                    if mtp and vendor_id == "2672":
+                        ingest_gopro_http(serial=serial, db=idb)
+                    elif mtp:
+                        ingest_mtp_device(serial=serial, db=idb)
+                    elif device_node:
+                        ingest_device(device_node=device_node, serial=serial, db=idb)
+                finally:
+                    idb.close()
+
+            threading.Thread(target=run_ingestion, daemon=True).start()
+            clear_pending_onboarding()
+
+    token = create_access_token(user.id)
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {
+            "id": user.id,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "email": user.email,
+            "is_admin": user.is_admin,
+            "camera_serials": user.camera_serials,
+            "afifly_name": user.afifly_name,
+            "is_active": user.is_active,
+            "created_at": user.created_at.isoformat(),
+        }
+    }
 
 
 @router.get("", response_model=list[UserResponse])
@@ -52,10 +149,7 @@ def get_user(user_id: int, db: Session = Depends(get_db), _: User = Depends(requ
 
 @router.patch("/{user_id}/cameras", response_model=UserResponse)
 def update_cameras(user_id: int, payload: UserUpdateCameras, db: Session = Depends(get_db), _: User = Depends(require_admin)):
-    """
-    Met à jour les numéros de série des caméras associées à un sautant.
-    Remplace la liste complète (ajouter ou retirer une caméra).
-    """
+    """Met à jour les numéros de série des caméras associées à un sautant."""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sautant introuvable.")
@@ -67,10 +161,7 @@ def update_cameras(user_id: int, payload: UserUpdateCameras, db: Session = Depen
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def deactivate_user(user_id: int, db: Session = Depends(get_db), _: User = Depends(require_admin)):
-    """
-    Désactive un compte sautant (soft delete).
-    Le compte reste en base pour conserver l'historique des vidéos.
-    """
+    """Désactive un compte sautant (soft delete)."""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sautant introuvable.")

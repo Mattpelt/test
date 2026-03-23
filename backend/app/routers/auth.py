@@ -1,21 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from passlib.context import CryptContext
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.auth import create_access_token, get_current_user
+from app.auth import create_access_token, get_current_user, pin_to_lookup_hash
 from app.database import get_db
 from app.models.user import User
 from app.schemas.user import UserResponse
 
 router = APIRouter(prefix="/auth", tags=["Authentification"])
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 class LoginRequest(BaseModel):
-    email: str
-    password: str
+    pin: str
 
 
 class TokenResponse(BaseModel):
@@ -25,12 +21,13 @@ class TokenResponse(BaseModel):
 
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
-    """Authentifie un utilisateur et retourne un JWT valable 7 jours."""
-    user = db.query(User).filter(User.email == payload.email, User.is_active == True).first()
-    if not user or not pwd_context.verify(payload.password, user.password_hash):
+    """Authentifie un utilisateur par son PIN et retourne un JWT valable 7 jours."""
+    lookup = pin_to_lookup_hash(payload.pin)
+    user = db.query(User).filter(User.pin_lookup_hash == lookup, User.is_active == True).first()
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Email ou mot de passe incorrect.",
+            detail="PIN incorrect.",
         )
     return {"access_token": create_access_token(user.id)}
 

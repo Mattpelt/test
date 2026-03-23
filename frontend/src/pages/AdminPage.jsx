@@ -125,8 +125,8 @@ function UsersTab() {
 
 function CreateUserForm({ onSuccess, onCancel }) {
   const [form, setForm] = useState({
-    first_name: '', last_name: '', email: '', password: '',
-    afifly_name: '', is_admin: false,
+    first_name: '', last_name: '', email: '', afifly_name: '',
+    pin: '', pin_confirm: '', is_admin: false,
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -138,9 +138,25 @@ function CreateUserForm({ onSuccess, onCancel }) {
   async function submit(e) {
     e.preventDefault()
     setError('')
+    const pinLen = form.is_admin ? 6 : 4
+    if (!/^\d+$/.test(form.pin) || form.pin.length !== pinLen) {
+      setError(`Le PIN doit contenir exactement ${pinLen} chiffres.`)
+      return
+    }
+    if (form.pin !== form.pin_confirm) {
+      setError('Les deux PIN ne correspondent pas.')
+      return
+    }
     setLoading(true)
     try {
-      await api.post('/users', form)
+      await api.post('/users', {
+        first_name: form.first_name,
+        last_name: form.last_name,
+        email: form.email || null,
+        afifly_name: form.afifly_name || null,
+        pin: form.pin,
+        is_admin: form.is_admin,
+      })
       onSuccess()
     } catch (err) {
       setError(err.response?.data?.detail ?? 'Erreur lors de la création.')
@@ -149,18 +165,39 @@ function CreateUserForm({ onSuccess, onCancel }) {
     }
   }
 
+  const pinLen = form.is_admin ? 6 : 4
+
   return (
     <form className={styles.inlineForm} onSubmit={submit}>
       <h3 className={styles.formTitle}>Nouveau sautant</h3>
       <div className={styles.formGrid}>
         <input className={styles.input} placeholder="Prénom *" value={form.first_name} onChange={set('first_name')} required />
         <input className={styles.input} placeholder="Nom *" value={form.last_name} onChange={set('last_name')} required />
-        <input className={styles.input} placeholder="Email *" type="email" value={form.email} onChange={set('email')} required />
-        <input className={styles.input} placeholder="Mot de passe *" type="password" value={form.password} onChange={set('password')} required />
-        <input className={styles.input} placeholder="Nom Afifly (optionnel)" value={form.afifly_name} onChange={set('afifly_name')} />
+        <input className={styles.input} placeholder="Email (optionnel)" type="email" value={form.email} onChange={set('email')} />
+        <input className={styles.input} placeholder="Nom Afifly *" value={form.afifly_name} onChange={set('afifly_name')} required />
+        <input
+          className={styles.input}
+          placeholder={`PIN * (${pinLen} chiffres)`}
+          type="password"
+          inputMode="numeric"
+          maxLength={pinLen}
+          value={form.pin}
+          onChange={set('pin')}
+          required
+        />
+        <input
+          className={styles.input}
+          placeholder="Confirmer PIN *"
+          type="password"
+          inputMode="numeric"
+          maxLength={pinLen}
+          value={form.pin_confirm}
+          onChange={set('pin_confirm')}
+          required
+        />
         <label className={styles.checkLabel}>
           <input type="checkbox" checked={form.is_admin} onChange={set('is_admin')} />
-          Administrateur
+          Administrateur (PIN 6 chiffres)
         </label>
       </div>
       {error && <p className={styles.error}>{error}</p>}

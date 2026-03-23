@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import os
 from datetime import datetime, timedelta
 
@@ -12,6 +14,11 @@ from app.models.user import User
 SECRET_KEY = os.getenv("SECRET_KEY", "change-me-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 24 * 7  # 7 jours
+
+
+def pin_to_lookup_hash(pin: str) -> str:
+    """Transforme un PIN en HMAC-SHA256 pour stockage et recherche en base."""
+    return hmac.new(SECRET_KEY.encode(), pin.encode(), hashlib.sha256).hexdigest()
 
 security = HTTPBearer()
 

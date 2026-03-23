@@ -20,9 +20,16 @@ export function AuthProvider({ children }) {
       .finally(() => setLoading(false))
   }, [])
 
-  async function login(email, password) {
-    const res = await api.post('/auth/login', { email, password })
+  async function login(pin) {
+    const res = await api.post('/auth/login', { pin })
     localStorage.setItem('token', res.data.access_token)
+    const me = await api.get('/auth/me')
+    setUser(me.data)
+    return me.data
+  }
+
+  async function loginWithToken(token) {
+    localStorage.setItem('token', token)
     const me = await api.get('/auth/me')
     setUser(me.data)
     return me.data
@@ -34,7 +41,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, loginWithToken, logout }}>
       {children}
     </AuthContext.Provider>
   )
