@@ -150,6 +150,46 @@
   padding: 2rem 1.5rem;
 }
 
+/* ── Vue toggle (Par rotation / Liste) ── */
+.viewToggleBar {
+  display: flex;
+  gap: 0;
+  margin-bottom: 1.5rem;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  overflow: hidden;
+  width: fit-content;
+}
+
+.viewToggleBtn {
+  background: none;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 500;
+  padding: 0.4rem 1rem;
+  transition: background 0.15s, color 0.15s;
+}
+
+.viewToggleBtn:hover { background: #1e293b; color: #94a3b8; }
+
+.viewToggleActive {
+  background: #1e293b;
+  color: #f1f5f9;
+}
+
+.meTagSm {
+  background: #1d4ed8;
+  border-radius: 4px;
+  color: #bfdbfe;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.1rem 0.35rem;
+  margin-left: 0.4rem;
+  vertical-align: middle;
+}
+
 /* ── Mes vidéos content ── */
 .videoContent {
   display: flex;

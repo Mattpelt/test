@@ -60,6 +60,7 @@ function MyVideosTab({ onPreview }) {
   const [videosByRot, setVideosByRot] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [view, setView] = useState('rot') // 'rot' | 'list'
 
   useEffect(() => {
     async function load() {
@@ -109,8 +110,27 @@ function MyVideosTab({ onPreview }) {
   }
 
   return (
-    <div className={styles.videoContent}>
-      {rots.map(rot => {
+    <div>
+      <div className={styles.viewToggleBar}>
+        <button
+          className={`${styles.viewToggleBtn} ${view === 'rot' ? styles.viewToggleActive : ''}`}
+          onClick={() => setView('rot')}
+        >
+          Par rotation
+        </button>
+        <button
+          className={`${styles.viewToggleBtn} ${view === 'list' ? styles.viewToggleActive : ''}`}
+          onClick={() => setView('list')}
+        >
+          Liste
+        </button>
+      </div>
+
+      {view === 'list' && (
+        <VideoListView rots={rots} videosByRot={videosByRot} onPreview={onPreview} currentUserId={user.id} />
+      )}
+
+      {view === 'rot' && <div className={styles.videoContent}>{rots.map(rot => {
         const myParticipant = rot.participants.find(p => p.user_id === user.id)
         const myGroupId = myParticipant?.group_id
         const groupMembers = rot.participants
@@ -186,8 +206,70 @@ function MyVideosTab({ onPreview }) {
             </div>
           </section>
         )
-      })}
+      })}</div>}
     </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────
+   Vue liste (flat)
+───────────────────────────────────────────────── */
+function VideoListView({ rots, videosByRot, onPreview, currentUserId }) {
+  // Aplatir toutes les vidéos avec contexte rot + sautant
+  const rows = []
+  for (const rot of rots) {
+    const videos = videosByRot[rot.id] ?? []
+    for (const video of videos) {
+      const participant = rot.participants.find(p => p.user_id === video.owner_id)
+      rows.push({ rot, video, ownerName: participant?.afifly_name ?? `#${video.owner_id}`, isMe: video.owner_id === currentUserId })
+    }
+  }
+  // Tri : rot_date desc, puis heure desc
+  rows.sort((a, b) => {
+    const d = b.rot.rot_date.localeCompare(a.rot.rot_date)
+    if (d !== 0) return d
+    return (b.rot.rot_time ?? '').localeCompare(a.rot.rot_time ?? '')
+  })
+
+  if (rows.length === 0) {
+    return <p className={styles.info}>Aucune vidéo disponible.</p>
+  }
+
+  function formatDate(dateStr) {
+    return new Date(dateStr + 'T00:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })
+  }
+
+  return (
+    <table className={styles.table}>
+      <thead>
+        <tr>
+          <th>Rotation</th>
+          <th>Date</th>
+          <th>Heure</th>
+          <th>Sautant</th>
+          <th>Fichier</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map(({ rot, video, ownerName, isMe }) => (
+          <tr key={video.id}>
+            <td>n°{rot.rot_number}</td>
+            <td className={styles.muted}>{formatDate(rot.rot_date)}</td>
+            <td className={styles.muted}>{rot.rot_time?.slice(0, 5) ?? '—'}</td>
+            <td>
+              {ownerName}
+              {isMe && <span className={styles.meTagSm}>moi</span>}
+            </td>
+            <td className={styles.videoFileName}>{video.file_name}</td>
+            <td className={styles.actions}>
+              <button className={styles.previewBtn} onClick={() => onPreview(video)}>Aperçu</button>
+              <button className={styles.downloadBtn} style={{ marginLeft: '0.4rem' }} onClick={() => downloadVideo(video.id, video.file_name)}>Télécharger</button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   )
 }
 
