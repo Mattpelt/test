@@ -257,6 +257,7 @@ function RotsSubTab() {
   const [rots, setRots] = useState([])
   const [loading, setLoading] = useState(true)
   const [editRot, setEditRot] = useState(null)
+  const [showAdd, setShowAdd] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -284,7 +285,15 @@ function RotsSubTab() {
     <div>
       <div className={styles.tabBar}>
         <h2 className={styles.tabTitle}>Rotations ({rots.length})</h2>
+        <button className={styles.primaryBtn} onClick={() => setShowAdd(true)}>+ Ajouter une rotation</button>
       </div>
+
+      {showAdd && (
+        <AddRotModal
+          onSuccess={() => { setShowAdd(false); load() }}
+          onCancel={() => setShowAdd(false)}
+        />
+      )}
 
       {editRot && (
         <RotForm
@@ -332,6 +341,271 @@ function RotsSubTab() {
         </table>
       )}
     </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────
+   Modale Ajouter une rotation (PDF ou JSON)
+───────────────────────────────────────────────── */
+function AddRotModal({ onSuccess, onCancel }) {
+  const [mode, setMode] = useState('pdf') // 'pdf' | 'json'
+
+  return (
+    <div className={styles.modalOverlay} onClick={e => e.target === e.currentTarget && onCancel()}>
+      <div className={styles.modal}>
+        <div className={styles.modalHeader}>
+          <h3 className={styles.modalTitle}>Ajouter une rotation</h3>
+          <button className={styles.modalClose} onClick={onCancel}>✕</button>
+        </div>
+
+        <div className={styles.modeTabs}>
+          <button
+            className={`${styles.modeTab} ${mode === 'pdf' ? styles.modeTabActive : ''}`}
+            onClick={() => setMode('pdf')}
+          >
+            PDF Afifly
+          </button>
+          <button
+            className={`${styles.modeTab} ${mode === 'json' ? styles.modeTabActive : ''}`}
+            onClick={() => setMode('json')}
+          >
+            Saisie manuelle
+          </button>
+        </div>
+
+        {mode === 'pdf'  && <PdfImportForm  onSuccess={onSuccess} onCancel={onCancel} />}
+        {mode === 'json' && <JsonImportForm onSuccess={onSuccess} onCancel={onCancel} />}
+      </div>
+    </div>
+  )
+}
+
+function PdfImportForm({ onSuccess, onCancel }) {
+  const [file, setFile]       = useState(null)
+  const [preview, setPreview] = useState(null) // données parsées
+  const [error, setError]     = useState('')
+  const [loading, setLoading] = useState(false)
+
+  async function handlePreview() {
+    if (!file) return
+    setError(''); setLoading(true); setPreview(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const { data } = await api.post('/rots/parse-preview', fd)
+      setPreview(data)
+    } catch (err) {
+      setError(err.response?.data?.detail ?? 'Erreur de parsing.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleImport() {
+    if (!file) return
+    setError(''); setLoading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      await api.post('/rots', fd)
+      onSuccess()
+    } catch (err) {
+      setError(err.response?.data?.detail ?? 'Erreur lors de l\'import.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className={styles.modalBody}>
+      <p className={styles.modeHint}>
+        Importez la feuille de rotation Afifly au format PDF.
+        Utilisez "Aperçu" pour vérifier les données avant de valider.
+      </p>
+
+      <label className={styles.fileZone}>
+        <input
+          type="file"
+          accept=".pdf"
+          className={styles.fileInput}
+          onChange={e => { setFile(e.target.files[0]); setPreview(null); setError('') }}
+        />
+        {file
+          ? <span className={styles.fileName}>📄 {file.name}</span>
+          : <span className={styles.filePlaceholder}>Cliquez ou déposez un PDF ici</span>
+        }
+      </label>
+
+      {error && <p className={styles.error}>{error}</p>}
+
+      {preview && (
+        <div className={styles.preview}>
+          <div className={styles.previewRow}>
+            <span className={styles.previewLabel}>Rotation</span>
+            <span>n°{preview.rot_number} — {preview.rot_date} à {preview.rot_time?.slice(0,5)}</span>
+          </div>
+          {preview.plane_registration && (
+            <div className={styles.previewRow}>
+              <span className={styles.previewLabel}>Avion</span>
+              <span>{preview.plane_registration}</span>
+            </div>
+          )}
+          {preview.pilot && (
+            <div className={styles.previewRow}>
+              <span className={styles.previewLabel}>Pilote</span>
+              <span>{preview.pilot}</span>
+            </div>
+          )}
+          <div className={styles.previewRow}>
+            <span className={styles.previewLabel}>Participants</span>
+            <span>{preview.participants?.length ?? 0}</span>
+          </div>
+          {preview.participants?.length > 0 && (
+            <ul className={styles.previewList}>
+              {preview.participants.map((p, i) => (
+                <li key={i} className={styles.previewItem}>
+                  <span className={styles.previewGroup}>G{p.group_id}</span>
+                  {p.afifly_name}
+                  {p.level && <span className={styles.previewLevel}>{p.level}</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      <div className={styles.formActions}>
+        {preview
+          ? <button className={styles.primaryBtn} onClick={handleImport} disabled={loading}>
+              {loading ? 'Import…' : 'Confirmer l\'import'}
+            </button>
+          : <button className={styles.primaryBtn} onClick={handlePreview} disabled={!file || loading}>
+              {loading ? 'Analyse…' : 'Aperçu'}
+            </button>
+        }
+        {preview && (
+          <button className={styles.secondaryBtn} onClick={() => setPreview(null)} disabled={loading}>
+            Rechoisir
+          </button>
+        )}
+        <button className={styles.secondaryBtn} onClick={onCancel} disabled={loading}>Annuler</button>
+      </div>
+    </div>
+  )
+}
+
+function JsonImportForm({ onSuccess, onCancel }) {
+  const today = new Date().toISOString().slice(0, 10)
+  const [form, setForm] = useState({
+    rot_number: '',
+    rot_date: today,
+    rot_time: '09:00',
+    plane_registration: '',
+    pilot: '',
+    chef_avion: '',
+  })
+  const [participants, setParticipants] = useState([
+    { afifly_name: '', level: '', group_id: 1 },
+  ])
+  const [error, setError]   = useState('')
+  const [loading, setLoading] = useState(false)
+
+  function setF(field) {
+    return e => setForm(f => ({ ...f, [field]: e.target.value }))
+  }
+
+  function setP(i, field) {
+    return e => setParticipants(ps => ps.map((p, j) => j === i ? { ...p, [field]: e.target.value } : p))
+  }
+
+  function addParticipant() {
+    setParticipants(ps => [...ps, { afifly_name: '', level: '', group_id: ps.length > 0 ? ps[ps.length-1].group_id : 1 }])
+  }
+
+  function removeParticipant(i) {
+    setParticipants(ps => ps.filter((_, j) => j !== i))
+  }
+
+  async function submit(e) {
+    e.preventDefault()
+    setError(''); setLoading(true)
+    try {
+      await api.post('/rots/json', {
+        rot_number:         Number(form.rot_number),
+        rot_date:           form.rot_date,
+        rot_time:           form.rot_time,
+        plane_registration: form.plane_registration || null,
+        pilot:              form.pilot || null,
+        chef_avion:         form.chef_avion || null,
+        participants: participants
+          .filter(p => p.afifly_name.trim())
+          .map(p => ({
+            afifly_name: p.afifly_name.trim(),
+            level:       p.level || null,
+            group_id:    Number(p.group_id) || 1,
+          })),
+      })
+      onSuccess()
+    } catch (err) {
+      setError(err.response?.data?.detail ?? 'Erreur.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <form className={styles.modalBody} onSubmit={submit}>
+      <div className={styles.jsonGrid}>
+        <input className={styles.input} placeholder="N° rotation *" type="number" value={form.rot_number} onChange={setF('rot_number')} required />
+        <input className={styles.input} type="date" value={form.rot_date} onChange={setF('rot_date')} required />
+        <input className={styles.input} type="time" value={form.rot_time} onChange={setF('rot_time')} required />
+        <input className={styles.input} placeholder="Immatriculation avion" value={form.plane_registration} onChange={setF('plane_registration')} />
+        <input className={styles.input} placeholder="Pilote" value={form.pilot} onChange={setF('pilot')} />
+        <input className={styles.input} placeholder="Chef avion" value={form.chef_avion} onChange={setF('chef_avion')} />
+      </div>
+
+      <div className={styles.participantsHeader}>
+        <span className={styles.participantsLabel}>Participants</span>
+        <button type="button" className={styles.addParticipantBtn} onClick={addParticipant}>+ Ajouter</button>
+      </div>
+
+      <div className={styles.participantList}>
+        {participants.map((p, i) => (
+          <div key={i} className={styles.participantRow}>
+            <input
+              className={styles.input}
+              placeholder="Nom Afifly *"
+              value={p.afifly_name}
+              onChange={setP(i, 'afifly_name')}
+            />
+            <input
+              className={styles.inputSm}
+              placeholder="Niveau"
+              value={p.level}
+              onChange={setP(i, 'level')}
+            />
+            <input
+              className={styles.inputSm}
+              placeholder="Groupe"
+              type="number"
+              min="1"
+              value={p.group_id}
+              onChange={setP(i, 'group_id')}
+            />
+            <button type="button" className={styles.removeParticipantBtn} onClick={() => removeParticipant(i)}>✕</button>
+          </div>
+        ))}
+      </div>
+
+      {error && <p className={styles.error}>{error}</p>}
+
+      <div className={styles.formActions}>
+        <button type="submit" className={styles.primaryBtn} disabled={loading}>
+          {loading ? 'Création…' : 'Créer la rotation'}
+        </button>
+        <button type="button" className={styles.secondaryBtn} onClick={onCancel}>Annuler</button>
+      </div>
+    </form>
   )
 }
 
