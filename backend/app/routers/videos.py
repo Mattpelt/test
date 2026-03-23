@@ -1,13 +1,14 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.orm import Session
 
-from app.auth import get_current_user, require_admin
+from app.auth import get_current_user, require_admin, SECRET_KEY, ALGORITHM
 from app.database import get_db
 from app.models.user import User
 from app.models.video import Video
 from app.schemas.video import VideoResponse, VideoUpdate
+from jose import JWTError, jwt
 
 router = APIRouter(prefix="/videos", tags=["Vidéos"])
 
@@ -60,21 +61,39 @@ def get_video(video_id: int, db: Session = Depends(get_db), _: User = Depends(ge
 
 
 @router.get("/{video_id}/download")
-def download_video(video_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def download_video(
+    video_id: int,
+    token: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    request: Request = None,
+):
     """
-    Télécharge une vidéo.
-    Utilise X-Accel-Redirect quand nginx est présent (production),
-    sinon FileResponse direct (développement).
+    Télécharge une vidéo via X-Accel-Redirect (nginx streame directement).
+    Accepte le token JWT en query param (?token=...) pour permettre
+    une navigation directe sans fetch côté client.
     """
     import os
+
+    # Authentification : Bearer header OU query param ?token=
+    auth_header = request.headers.get("Authorization", "")
+    raw_token = token or (auth_header.removeprefix("Bearer ").strip() or None)
+    if not raw_token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token manquant.")
+    try:
+        payload = jwt.decode(raw_token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = int(payload["sub"])
+    except (JWTError, KeyError, ValueError):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token invalide ou expiré.")
+    user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Utilisateur introuvable.")
+
     video = db.query(Video).filter(Video.id == video_id).first()
     if not video:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vidéo introuvable.")
     if not video.file_path or not os.path.exists(video.file_path):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fichier vidéo introuvable sur le disque.")
 
-    # X-Accel-Redirect : nginx sert le fichier directement (performances optimales)
-    # Le chemin interne nginx /protected-videos/ est mappé vers VIDEO_STORAGE_PATH
     internal_path = video.file_path.replace("/mnt/videos", "/protected-videos", 1)
     filename = os.path.basename(video.file_path)
     return Response(

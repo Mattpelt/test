@@ -293,16 +293,12 @@ function SettingField({ label, hint, value, unit, onChange }) {
   )
 }
 
-// Téléchargement avec Bearer token
-async function downloadVideo(videoId, fileName) {
+// Téléchargement : navigation directe avec token en query param
+// Permet à nginx de streamer le fichier sans le charger en mémoire
+function downloadVideo(videoId, fileName) {
   const token = localStorage.getItem('token')
-  const res = await fetch(`/api/videos/${videoId}/download`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-  if (!res.ok) return
-  const blob = await res.blob()
-  const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
-  a.href = url; a.download = fileName; a.click()
-  URL.revokeObjectURL(url)
+  a.href = `/api/videos/${videoId}/download?token=${encodeURIComponent(token)}`
+  a.download = fileName
+  a.click()
 }
