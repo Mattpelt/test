@@ -249,7 +249,6 @@ function CameraManager({ profile, onChanged }) {
           {myCameras.length > 0
             ? myCameras.map(cam => (
                 <li key={cam.serial} className={pStyles.cameraItem}>
-                  <span className={pStyles.cameraLed} />
                   <span className={pStyles.cameraInfo}>
                     {cam.make || cam.model
                       ? <span className={pStyles.cameraModel}>{[cam.make, cam.model].filter(Boolean).join(' ')}</span>
@@ -261,7 +260,6 @@ function CameraManager({ profile, onChanged }) {
               ))
             : profile.camera_serials.map(serial => (
                 <li key={serial} className={pStyles.cameraItem}>
-                  <span className={pStyles.cameraLed} />
                   <span className={pStyles.cameraInfo}>
                     <span className={pStyles.cameraSerial}>{serial}</span>
                   </span>

@@ -167,15 +167,6 @@
   padding: 0.625rem 0.875rem;
 }
 
-.cameraLed {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #22c55e;
-  flex-shrink: 0;
-  animation: pulse 2s ease-in-out infinite;
-}
-
 .cameraInfo {
   display: flex;
   flex-direction: column;

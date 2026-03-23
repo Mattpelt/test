@@ -178,9 +178,12 @@ def get_my_cameras(db: Session = Depends(get_db), current_user: User = Depends(g
         cam = db.query(Camera).filter(Camera.serial == serial).first()
         make  = cam.make  if cam else None
         model = cam.model if cam else None
-        # Déduction heuristique si pas encore en DB
-        if not make and not model and serial in ("0001", "0000"):
-            make = "Insta360"
+        # Déduction depuis vendor_id ou serial si make toujours inconnu
+        if not make:
+            if cam and cam.vendor_id == "2672":
+                make = "GoPro"
+            elif serial in ("0001", "0000"):
+                make = "Insta360"
         result.append({
             "serial": serial,
             "make": make,
