@@ -145,14 +145,15 @@ function UsersSubTab() {
 function UserForm({ user, onSuccess, onCancel }) {
   const isEdit = !!user
   const [form, setForm] = useState({
-    first_name:     user?.first_name ?? '',
-    last_name:      user?.last_name ?? '',
-    email:          user?.email ?? '',
-    afifly_name:    user?.afifly_name ?? '',
-    camera_serials: user?.camera_serials?.join(', ') ?? '',
-    pin:            '',
-    pin_confirm:    '',
-    is_admin:       user?.is_admin ?? false,
+    first_name:            user?.first_name ?? '',
+    last_name:             user?.last_name ?? '',
+    email:                 user?.email ?? '',
+    afifly_name:           user?.afifly_name ?? '',
+    camera_serials:        user?.camera_serials?.join(', ') ?? '',
+    pin:                   '',
+    pin_confirm:           '',
+    is_admin:              user?.is_admin ?? false,
+    notifications_enabled: user?.notifications_enabled ?? true,
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -178,12 +179,13 @@ function UserForm({ user, onSuccess, onCancel }) {
     }
 
     const payload = {
-      first_name:     form.first_name,
-      last_name:      form.last_name,
-      email:          form.email || null,
-      afifly_name:    form.afifly_name || null,
-      camera_serials: form.camera_serials ? form.camera_serials.split(',').map(s => s.trim()).filter(Boolean) : [],
-      is_admin:       form.is_admin,
+      first_name:            form.first_name,
+      last_name:             form.last_name,
+      email:                 form.email || null,
+      afifly_name:           form.afifly_name || null,
+      camera_serials:        form.camera_serials ? form.camera_serials.split(',').map(s => s.trim()).filter(Boolean) : [],
+      is_admin:              form.is_admin,
+      notifications_enabled: form.notifications_enabled,
     }
     if (form.pin) payload.pin = form.pin
 
@@ -237,6 +239,10 @@ function UserForm({ user, onSuccess, onCancel }) {
         <label className={styles.checkLabel}>
           <input type="checkbox" checked={form.is_admin} onChange={set('is_admin')} />
           Administrateur (PIN 6 chiffres)
+        </label>
+        <label className={styles.checkLabel}>
+          <input type="checkbox" checked={form.notifications_enabled} onChange={set('notifications_enabled')} />
+          Notifications email activées
         </label>
       </div>
       {error && <p className={styles.error}>{error}</p>}

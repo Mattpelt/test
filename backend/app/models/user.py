@@ -15,6 +15,7 @@ class User(Base):
     pin_lookup_hash  = Column(String, unique=True, nullable=True, index=True)  # HMAC-SHA256 du PIN
     camera_serials   = Column(ARRAY(String), default=[])
     afifly_name      = Column(String)                    # nom tel qu'il apparaît dans les PDFs Afifly
-    is_admin         = Column(Boolean, default=False)
-    is_active        = Column(Boolean, default=True)
+    is_admin               = Column(Boolean, default=False)
+    is_active              = Column(Boolean, default=True)
+    notifications_enabled  = Column(Boolean, default=True)
     created_at       = Column(DateTime, default=datetime.utcnow)

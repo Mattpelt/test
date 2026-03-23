@@ -36,12 +36,13 @@ export default function ProfileTab() {
 ───────────────────────────────────────────────── */
 function ProfileForm({ profile, onSaved }) {
   const [form, setForm] = useState({
-    first_name:  profile.first_name,
-    last_name:   profile.last_name,
-    email:       profile.email ?? '',
-    afifly_name: profile.afifly_name ?? '',
-    pin:         '',
-    pinConfirm:  '',
+    first_name:            profile.first_name,
+    last_name:             profile.last_name,
+    email:                 profile.email ?? '',
+    afifly_name:           profile.afifly_name ?? '',
+    pin:                   '',
+    pinConfirm:            '',
+    notifications_enabled: profile.notifications_enabled ?? true,
   })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved]   = useState(false)
@@ -70,10 +71,11 @@ function ProfileForm({ profile, onSaved }) {
     setSaving(true)
     try {
       const payload = {
-        first_name:  form.first_name  || undefined,
-        last_name:   form.last_name   || undefined,
-        email:       form.email       || null,
-        afifly_name: form.afifly_name || null,
+        first_name:            form.first_name  || undefined,
+        last_name:             form.last_name   || undefined,
+        email:                 form.email       || null,
+        afifly_name:           form.afifly_name || null,
+        notifications_enabled: form.notifications_enabled,
       }
       if (form.pin) payload.pin = form.pin
       await api.patch('/users/me', payload)
@@ -148,6 +150,23 @@ function ProfileForm({ profile, onSaved }) {
               autoComplete="new-password"
             />
           </div>
+        </div>
+
+        <div className={pStyles.divider} />
+
+        <div className={pStyles.notifRow}>
+          <div className={pStyles.notifLabel}>
+            <span className={pStyles.notifTitle}>Notifications email</span>
+            <span className={pStyles.notifHint}>Recevoir un email quand vos vidéos sont prêtes</span>
+          </div>
+          <label className={pStyles.toggle}>
+            <input
+              type="checkbox"
+              checked={form.notifications_enabled}
+              onChange={e => setForm(f => ({ ...f, notifications_enabled: e.target.checked }))}
+            />
+            <span className={pStyles.toggleSlider} />
+          </label>
         </div>
 
         {error && <p className={pStyles.error}>{error}</p>}

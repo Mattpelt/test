@@ -165,6 +165,8 @@ def update_me(payload: UserSelfUpdate, db: Session = Depends(get_db), current_us
         lookup = pin_to_lookup_hash(payload.pin)
         _pin_unique(lookup, db, exclude_id=current_user.id)
         current_user.pin_lookup_hash = lookup
+    if payload.notifications_enabled is not None:
+        current_user.notifications_enabled = payload.notifications_enabled
     db.commit()
     db.refresh(current_user)
     return current_user
@@ -296,6 +298,8 @@ def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(get_db)
         lookup = pin_to_lookup_hash(payload.pin)
         _pin_unique(lookup, db, exclude_id=user_id)
         user.pin_lookup_hash = lookup
+    if payload.notifications_enabled is not None:
+        user.notifications_enabled = payload.notifications_enabled
     db.commit()
     db.refresh(user)
     logger.info(f"[USERS] Compte mis à jour par admin : id={user_id}")

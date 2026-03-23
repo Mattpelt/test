@@ -19,9 +19,9 @@ def notify_videos_ready(user: User, rot_ids: list[int], db: Session) -> None:
     """
     settings = db.query(Settings).first()
 
-    if not settings or not settings.notifications_enabled:
+    if not getattr(user, 'notifications_enabled', True):
         return
-    if not settings.smtp_host or not settings.smtp_from:
+    if not settings or not settings.smtp_host or not settings.smtp_from:
         logger.warning("[NOTIF] Notifications activées mais config SMTP incomplète — email non envoyé.")
         return
     if not user.email:

@@ -24,23 +24,25 @@ class OnboardingRequest(BaseModel):
 
 class UserSelfUpdate(BaseModel):
     """Mise à jour du profil par l'utilisateur lui-même."""
-    first_name:  str | None = None
-    last_name:   str | None = None
-    email:       str | None = None
-    afifly_name: str | None = None
-    pin:         str | None = None   # nouveau PIN (optionnel)
+    first_name:             str | None = None
+    last_name:              str | None = None
+    email:                  str | None = None
+    afifly_name:            str | None = None
+    pin:                    str | None = None   # nouveau PIN (optionnel)
+    notifications_enabled:  bool | None = None
 
 
 class UserUpdate(BaseModel):
     """Mise à jour partielle d'un utilisateur (admin uniquement)."""
-    first_name:     str | None = None
-    last_name:      str | None = None
-    email:          str | None = None
-    afifly_name:    str | None = None
-    pin:            str | None = None
-    camera_serials: list[str] | None = None
-    is_admin:       bool | None = None
-    is_active:      bool | None = None
+    first_name:            str | None = None
+    last_name:             str | None = None
+    email:                 str | None = None
+    afifly_name:           str | None = None
+    pin:                   str | None = None
+    camera_serials:        list[str] | None = None
+    is_admin:              bool | None = None
+    is_active:             bool | None = None
+    notifications_enabled: bool | None = None
 
 
 class UserUpdateCameras(BaseModel):
@@ -50,15 +52,16 @@ class UserUpdateCameras(BaseModel):
 
 class UserResponse(BaseModel):
     """Données retournées par l'API (le PIN n'est jamais exposé)."""
-    id:             int
-    first_name:     str
-    last_name:      str
-    email:          str | None
-    camera_serials: list[str]
-    afifly_name:    str | None
-    is_admin:       bool
-    is_active:      bool
-    created_at:     datetime
+    id:                    int
+    first_name:            str
+    last_name:             str
+    email:                 str | None
+    camera_serials:        list[str]
+    afifly_name:           str | None
+    is_admin:              bool
+    is_active:             bool
+    notifications_enabled: bool
+    created_at:            datetime
 
     class Config:
         from_attributes = True
