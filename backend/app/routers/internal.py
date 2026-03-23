@@ -101,6 +101,9 @@ def camera_connected(event: CameraEvent):
             enriched_model = " ".join(filter(None, [cam_record.make, cam_record.model]))
         else:
             enriched_model = _vendor_display(event.vendor_id, event.model_name)
+
+        # Capturer le nom avant fermeture de session (évite DetachedInstanceError)
+        user_name = f"{user.first_name} {user.last_name}" if user else None
     finally:
         db.close()
 
@@ -120,13 +123,13 @@ def camera_connected(event: CameraEvent):
 
     # Serial connu → ingestion
     if event.mtp and event.vendor_id == "2672":
-        logger.info(f"[USB] → GoPro HERO ({user.first_name} {user.last_name}) — Open GoPro HTTP")
+        logger.info(f"[USB] → GoPro HERO ({user_name}) — Open GoPro HTTP")
         _run_in_background(ingest_gopro_http, serial=event.serial)
     elif event.mtp:
-        logger.info(f"[USB] → MTP/PTP ({user.first_name} {user.last_name}) — gphoto2")
+        logger.info(f"[USB] → MTP/PTP ({user_name}) — gphoto2")
         _run_in_background(ingest_mtp_device, serial=event.serial)
     elif event.device_node:
-        logger.info(f"[USB] → Mass Storage ({user.first_name} {user.last_name}) — {event.device_node}")
+        logger.info(f"[USB] → Mass Storage ({user_name}) — {event.device_node}")
         _run_in_background(ingest_device, device_node=event.device_node, serial=event.serial)
     else:
         logger.warning(f"[USB] Événement ignoré — ni device_node ni mtp=True (serial: {event.serial})")
