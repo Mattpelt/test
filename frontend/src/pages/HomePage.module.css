@@ -581,6 +581,32 @@
   color: #bfdbfe;
 }
 
+/* ── Groups list in rot table ── */
+.groupsList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.groupChip {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+.groupLabel {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  color: #60a5fa;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.05rem 0.35rem;
+  flex-shrink: 0;
+}
+
 /* ── Modal Ajouter une rotation ── */
 .modalOverlay {
   position: fixed;

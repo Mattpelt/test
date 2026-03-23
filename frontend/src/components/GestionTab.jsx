@@ -309,34 +309,50 @@ function RotsSubTab() {
         <table className={styles.table}>
           <thead>
             <tr>
-              <th>N°</th>
-              <th>Date</th>
-              <th>Heure</th>
+              <th>Rot</th>
+              <th>Date · Heure</th>
               <th>Avion</th>
-              <th>Pilote</th>
-              <th>Statut</th>
+              <th>Participants</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
-            {rots.map(rot => (
-              <tr key={rot.id}>
-                <td>#{rot.rot_number}</td>
-                <td>{formatDate(rot.rot_date)}</td>
-                <td>{rot.rot_time?.slice(0, 5)}</td>
-                <td className={styles.muted}>{rot.plane_registration ?? '—'}</td>
-                <td className={styles.muted}>{rot.pilot ?? '—'}</td>
-                <td>
-                  <span className={rot.parse_status === 'OK' ? styles.badgeOk : styles.badgeErr}>
-                    {rot.parse_status}
-                  </span>
-                </td>
-                <td className={styles.actions}>
-                  <button className={styles.editBtn} onClick={() => setEditRot(rot)}>Modifier</button>
-                  <button className={styles.dangerBtn} onClick={() => deleteRot(rot.id, rot.rot_number)}>Supprimer</button>
-                </td>
-              </tr>
-            ))}
+            {rots.map(rot => {
+              const groups = rot.participants?.reduce((acc, p) => {
+                const g = p.group_id ?? 1
+                acc[g] = (acc[g] || []).concat(p.afifly_name)
+                return acc
+              }, {}) ?? {}
+              const groupKeys = Object.keys(groups).sort((a,b) => Number(a)-Number(b))
+              return (
+                <tr key={rot.id}>
+                  <td>
+                    <span>#{rot.rot_number}</span>
+                    {rot.day_number && <span className={styles.muted}> · saut {rot.day_number}</span>}
+                  </td>
+                  <td className={styles.muted}>
+                    {formatDate(rot.rot_date)} · {rot.rot_time?.slice(0, 5)}
+                  </td>
+                  <td className={styles.muted}>{rot.plane_registration ?? '—'}</td>
+                  <td>
+                    {groupKeys.length === 0 ? <span className={styles.muted}>—</span> : (
+                      <div className={styles.groupsList}>
+                        {groupKeys.map(g => (
+                          <span key={g} className={styles.groupChip}>
+                            <span className={styles.groupLabel}>G{g}</span>
+                            {groups[g].join(', ')}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </td>
+                  <td className={styles.actions}>
+                    <button className={styles.editBtn} onClick={() => setEditRot(rot)}>Modifier</button>
+                    <button className={styles.dangerBtn} onClick={() => deleteRot(rot.id, rot.rot_number)}>Supprimer</button>
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       )}
@@ -615,14 +631,28 @@ function RotForm({ rot, onSuccess, onCancel }) {
     rot_date:           rot.rot_date,
     rot_time:           rot.rot_time?.slice(0, 5) ?? '',
     plane_registration: rot.plane_registration ?? '',
-    pilot:              rot.pilot ?? '',
-    chef_avion:         rot.chef_avion ?? '',
   })
+  const [participants, setParticipants] = useState(
+    (rot.participants ?? [])
+      .slice()
+      .sort((a, b) => (a.group_id ?? 1) - (b.group_id ?? 1) || a.afifly_name.localeCompare(b.afifly_name))
+      .map(p => ({ afifly_name: p.afifly_name, level: p.level ?? '', group_id: p.group_id ?? 1 }))
+  )
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  function set(field) {
+  function setF(field) {
     return e => setForm(f => ({ ...f, [field]: e.target.value }))
+  }
+  function setP(i, field) {
+    return e => setParticipants(ps => ps.map((p, j) => j === i ? { ...p, [field]: e.target.value } : p))
+  }
+  function addParticipant() {
+    const lastGroup = participants.length > 0 ? participants[participants.length - 1].group_id : 1
+    setParticipants(ps => [...ps, { afifly_name: '', level: '', group_id: lastGroup }])
+  }
+  function removeParticipant(i) {
+    setParticipants(ps => ps.filter((_, j) => j !== i))
   }
 
   async function submit(e) {
@@ -630,15 +660,15 @@ function RotForm({ rot, onSuccess, onCancel }) {
     setError('')
     setLoading(true)
     try {
-      const payload = {
+      await api.patch(`/rots/${rot.id}`, {
         rot_number:         Number(form.rot_number),
         rot_date:           form.rot_date,
         rot_time:           form.rot_time,
         plane_registration: form.plane_registration || null,
-        pilot:              form.pilot || null,
-        chef_avion:         form.chef_avion || null,
-      }
-      await api.patch(`/rots/${rot.id}`, payload)
+        participants: participants
+          .filter(p => p.afifly_name.trim())
+          .map(p => ({ afifly_name: p.afifly_name.trim(), level: p.level || null, group_id: Number(p.group_id) || 1 })),
+      })
       onSuccess()
     } catch (err) {
       setError(err.response?.data?.detail ?? 'Erreur.')
@@ -651,13 +681,27 @@ function RotForm({ rot, onSuccess, onCancel }) {
     <form className={styles.inlineForm} onSubmit={submit}>
       <h3 className={styles.formTitle}>Modifier la rotation</h3>
       <div className={styles.formGrid}>
-        <input className={styles.input} placeholder="N° rot *" type="number" value={form.rot_number} onChange={set('rot_number')} required />
-        <input className={styles.input} placeholder="Date *" type="date" value={form.rot_date} onChange={set('rot_date')} required />
-        <input className={styles.input} placeholder="Heure *" type="time" value={form.rot_time} onChange={set('rot_time')} required />
-        <input className={styles.input} placeholder="Immatriculation avion" value={form.plane_registration} onChange={set('plane_registration')} />
-        <input className={styles.input} placeholder="Pilote" value={form.pilot} onChange={set('pilot')} />
-        <input className={styles.input} placeholder="Chef avion" value={form.chef_avion} onChange={set('chef_avion')} />
+        <input className={styles.input} placeholder="N° rot *" type="number" value={form.rot_number} onChange={setF('rot_number')} required />
+        <input className={styles.input} placeholder="Date *" type="date" value={form.rot_date} onChange={setF('rot_date')} required />
+        <input className={styles.input} placeholder="Heure *" type="time" value={form.rot_time} onChange={setF('rot_time')} required />
+        <input className={styles.input} placeholder="Immatriculation avion" value={form.plane_registration} onChange={setF('plane_registration')} />
       </div>
+
+      <div className={styles.participantsHeader}>
+        <span className={styles.participantsLabel}>Participants ({participants.length})</span>
+        <button type="button" className={styles.addParticipantBtn} onClick={addParticipant}>+ Ajouter</button>
+      </div>
+      <div className={styles.participantList}>
+        {participants.map((p, i) => (
+          <div key={i} className={styles.participantRow}>
+            <input className={styles.input} placeholder="Nom Afifly *" value={p.afifly_name} onChange={setP(i, 'afifly_name')} />
+            <input className={styles.inputSm} placeholder="Niveau" value={p.level} onChange={setP(i, 'level')} />
+            <input className={styles.inputSm} placeholder="Grp" type="number" min="1" value={p.group_id} onChange={setP(i, 'group_id')} />
+            <button type="button" className={styles.removeParticipantBtn} onClick={() => removeParticipant(i)}>✕</button>
+          </div>
+        ))}
+      </div>
+
       {error && <p className={styles.error}>{error}</p>}
       <div className={styles.formActions}>
         <button type="submit" className={styles.primaryBtn} disabled={loading}>{loading ? '…' : 'Enregistrer'}</button>

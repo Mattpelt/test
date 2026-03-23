@@ -12,7 +12,7 @@ from app.models.rot import Rot
 from app.models.rot_participant import RotParticipant
 from app.models.video import Video
 from app.models.user import User
-from app.schemas.rot import RotDetailResponse, RotInput, RotResponse, RotUpdate
+from app.schemas.rot import RotDetailResponse, RotInput, RotResponse, RotUpdate, RotParticipantUpdate
 from app.services.pdf_parser import parse_afifly_pdf
 from app.services.rot_service import persist_rot, upsert_rot
 
@@ -218,9 +218,9 @@ def list_my_rots(db: Session = Depends(get_db), current_user: User = Depends(get
     )
 
 
-@router.get("", response_model=list[RotResponse])
+@router.get("", response_model=list[RotDetailResponse])
 def list_rots(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
-    """Retourne toutes les rotations, de la plus récente à la plus ancienne."""
+    """Retourne toutes les rotations avec participants, de la plus récente à la plus ancienne."""
     return db.query(Rot).order_by(Rot.rot_date.desc(), Rot.rot_time.desc()).all()
 
 
@@ -233,14 +233,27 @@ def get_rot(rot_id: int, db: Session = Depends(get_db), _: User = Depends(get_cu
     return rot
 
 
-@router.patch("/{rot_id}", response_model=RotResponse)
+@router.patch("/{rot_id}", response_model=RotDetailResponse)
 def update_rot(rot_id: int, payload: RotUpdate, db: Session = Depends(get_db), _: User = Depends(require_admin)):
-    """Met à jour les métadonnées d'une rotation (réservé à l'admin)."""
+    """Met à jour les métadonnées et participants d'une rotation (réservé à l'admin)."""
     rot = db.query(Rot).filter(Rot.id == rot_id).first()
     if not rot:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rot introuvable.")
-    for field, val in payload.model_dump(exclude_none=True).items():
+    for field, val in payload.model_dump(exclude_none=True, exclude={"participants"}).items():
         setattr(rot, field, val)
+    if payload.participants is not None:
+        db.query(RotParticipant).filter(RotParticipant.rot_id == rot_id).delete()
+        for p in payload.participants:
+            user = db.query(User).filter(
+                User.afifly_name == p.afifly_name, User.is_active == True
+            ).first()
+            db.add(RotParticipant(
+                rot_id=rot_id,
+                user_id=user.id if user else None,
+                afifly_name=p.afifly_name,
+                level=p.level,
+                group_id=p.group_id,
+            ))
     db.commit()
     db.refresh(rot)
     return rot
