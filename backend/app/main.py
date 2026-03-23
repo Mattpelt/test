@@ -1,5 +1,15 @@
 import logging
 from fastapi import FastAPI
+
+
+class _SuppressPolling(logging.Filter):
+    """Filtre les requêtes de polling répétitives des logs d'accès uvicorn."""
+    _SUPPRESSED = {"/internal/onboarding/pending", "/health"}
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        return not any(path in msg for path in self._SUPPRESSED)
+
 from sqlalchemy import text
 from apscheduler.schedulers.background import BackgroundScheduler
 from app.database import Base, engine, SessionLocal
@@ -13,6 +23,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
 )
+logging.getLogger("uvicorn.access").addFilter(_SuppressPolling())
 
 logger = logging.getLogger(__name__)
 
