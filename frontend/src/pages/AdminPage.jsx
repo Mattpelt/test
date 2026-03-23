@@ -249,6 +249,14 @@ function SettingsTab() {
     return e => setSettings(s => ({ ...s, [field]: Number(e.target.value) }))
   }
 
+  function setText(field) {
+    return e => setSettings(s => ({ ...s, [field]: e.target.value }))
+  }
+
+  function setToggle(field) {
+    return e => setSettings(s => ({ ...s, [field]: e.target.checked }))
+  }
+
   async function save(e) {
     e.preventDefault()
     setSaving(true)
@@ -303,6 +311,70 @@ function SettingsTab() {
           unit="heures"
           onChange={set('jump_window_hours')}
         />
+
+        <hr className={styles.divider} />
+        <h3 className={styles.sectionTitle}>Notifications email</h3>
+
+        <div className={styles.settingRow}>
+          <div>
+            <div className={styles.settingLabel}>Activer les notifications</div>
+            <div className={styles.settingHint}>Envoie un email au sautant quand ses vidéos sont prêtes.</div>
+          </div>
+          <label className={styles.toggle}>
+            <input type="checkbox" checked={!!settings.notifications_enabled} onChange={setToggle('notifications_enabled')} />
+            <span className={styles.toggleSlider} />
+          </label>
+        </div>
+
+        <div className={styles.settingRow}>
+          <div>
+            <div className={styles.settingLabel}>URL de l'application</div>
+            <div className={styles.settingHint}>Lien inclus dans l'email (ex: http://192.168.1.39).</div>
+          </div>
+          <input className={styles.textInput} value={settings.app_url ?? ''} onChange={setText('app_url')} placeholder="http://192.168.1.39" />
+        </div>
+
+        <div className={styles.settingRow}>
+          <div>
+            <div className={styles.settingLabel}>Serveur SMTP</div>
+            <div className={styles.settingHint}>Hôte du serveur d'envoi (ex: smtp.gmail.com).</div>
+          </div>
+          <input className={styles.textInput} value={settings.smtp_host ?? ''} onChange={setText('smtp_host')} placeholder="smtp.gmail.com" />
+        </div>
+
+        <div className={styles.settingRow}>
+          <div>
+            <div className={styles.settingLabel}>Port SMTP</div>
+            <div className={styles.settingHint}>587 (STARTTLS) recommandé.</div>
+          </div>
+          <div className={styles.settingInput}>
+            <input type="number" className={styles.numInput} value={settings.smtp_port ?? 587} onChange={set('smtp_port')} />
+          </div>
+        </div>
+
+        <div className={styles.settingRow}>
+          <div>
+            <div className={styles.settingLabel}>Utilisateur SMTP</div>
+            <div className={styles.settingHint}>Adresse email utilisée pour l'authentification.</div>
+          </div>
+          <input className={styles.textInput} value={settings.smtp_user ?? ''} onChange={setText('smtp_user')} placeholder="expediteur@gmail.com" />
+        </div>
+
+        <div className={styles.settingRow}>
+          <div>
+            <div className={styles.settingLabel}>Mot de passe SMTP</div>
+            <div className={styles.settingHint}>Laissez vide pour ne pas modifier le mot de passe enregistré.</div>
+          </div>
+          <input className={styles.textInput} type="password" value={settings.smtp_password ?? ''} onChange={setText('smtp_password')} placeholder="••••••••••••••••" />
+        </div>
+
+        <div className={styles.settingRow}>
+          <div>
+            <div className={styles.settingLabel}>Adresse expéditeur</div>
+            <div className={styles.settingHint}>Adresse affichée dans le champ "De" de l'email.</div>
+          </div>
+          <input className={styles.textInput} value={settings.smtp_from ?? ''} onChange={setText('smtp_from')} placeholder="noreply@skydive.fr" />
+        </div>
 
         {error  && <p className={styles.error}>{error}</p>}
         {saved  && <p className={styles.success}>Paramètres sauvegardés.</p>}

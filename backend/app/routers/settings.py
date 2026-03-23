@@ -16,6 +16,12 @@ class SettingsResponse(BaseModel):
     jump_target_delta_min:   int
     jump_window_hours:       int
     video_storage_path:      str
+    notifications_enabled:   bool
+    app_url:                 str | None
+    smtp_host:               str | None
+    smtp_port:               int
+    smtp_user:               str | None
+    smtp_from:               str | None
 
     class Config:
         from_attributes = True
@@ -27,6 +33,13 @@ class SettingsUpdate(BaseModel):
     jump_target_delta_min:   int | None = None
     jump_window_hours:       int | None = None
     video_storage_path:      str | None = None
+    notifications_enabled:   bool | None = None
+    app_url:                 str | None = None
+    smtp_host:               str | None = None
+    smtp_port:               int | None = None
+    smtp_user:               str | None = None
+    smtp_password:           str | None = None
+    smtp_from:               str | None = None
 
 
 @router.get("", response_model=SettingsResponse)

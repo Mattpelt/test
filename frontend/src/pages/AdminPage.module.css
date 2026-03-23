@@ -319,3 +319,69 @@
 .info    { color: #94a3b8; }
 .error   { color: #f87171; font-size: 0.875rem; margin: 0; }
 .success { color: #86efac; font-size: 0.875rem; margin: 0; }
+
+/* ── Settings SMTP section ── */
+.divider {
+  border: none;
+  border-top: 1px solid #334155;
+  margin: 1.5rem 0 1rem;
+}
+
+.sectionTitle {
+  color: #94a3b8;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  margin: 0 0 0.5rem;
+  text-transform: uppercase;
+}
+
+.textInput {
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #f1f5f9;
+  font-size: 0.875rem;
+  outline: none;
+  padding: 0.4rem 0.6rem;
+  width: 220px;
+}
+
+.textInput:focus { border-color: #3b82f6; }
+
+/* Toggle switch */
+.toggle {
+  cursor: pointer;
+  display: inline-block;
+  height: 24px;
+  position: relative;
+  width: 44px;
+}
+
+.toggle input { display: none; }
+
+.toggleSlider {
+  background: #334155;
+  border-radius: 12px;
+  bottom: 0;
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+  transition: background 0.2s;
+}
+
+.toggleSlider::before {
+  background: #f1f5f9;
+  border-radius: 50%;
+  bottom: 3px;
+  content: '';
+  height: 18px;
+  left: 3px;
+  position: absolute;
+  transition: transform 0.2s;
+  width: 18px;
+}
+
+.toggle input:checked + .toggleSlider { background: #3b82f6; }
+.toggle input:checked + .toggleSlider::before { transform: translateX(20px); }

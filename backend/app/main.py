@@ -50,6 +50,13 @@ def _migrate():
         "ALTER TABLE settings ADD COLUMN IF NOT EXISTS jump_window_hours INTEGER DEFAULT 2",
         "ALTER TABLE videos ADD COLUMN IF NOT EXISTS rot_id INTEGER REFERENCES rots(id)",
         "ALTER TABLE videos ADD COLUMN IF NOT EXISTS group_id INTEGER",
+        "ALTER TABLE settings ADD COLUMN IF NOT EXISTS notifications_enabled BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE settings ADD COLUMN IF NOT EXISTS app_url VARCHAR DEFAULT 'http://192.168.1.39'",
+        "ALTER TABLE settings ADD COLUMN IF NOT EXISTS smtp_host VARCHAR",
+        "ALTER TABLE settings ADD COLUMN IF NOT EXISTS smtp_port INTEGER DEFAULT 587",
+        "ALTER TABLE settings ADD COLUMN IF NOT EXISTS smtp_user VARCHAR",
+        "ALTER TABLE settings ADD COLUMN IF NOT EXISTS smtp_password VARCHAR",
+        "ALTER TABLE settings ADD COLUMN IF NOT EXISTS smtp_from VARCHAR",
     ]
     with engine.connect() as conn:
         applied = 0

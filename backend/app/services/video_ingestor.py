@@ -16,6 +16,7 @@ from app.models.settings import Settings
 from app.models.user import User
 from app.models.video import Video
 from app.services.matcher import match_videos_to_rots
+from app.services.notifier import notify_videos_ready
 
 logger = logging.getLogger(__name__)
 
@@ -174,6 +175,7 @@ def ingest_device(device_node: str, serial: str, db: Session) -> None:
         total = len(video_files)
         ingested = skipped = unmatched = 0
         date_str = datetime.now().strftime("%Y-%m-%d")
+        matched_rot_ids: list[int] = []
 
         for i, video_file in enumerate(video_files, 1):
             match = matches.get(video_file.name)
@@ -199,6 +201,7 @@ def ingest_device(device_node: str, serial: str, db: Session) -> None:
             _save_video_record(db, video_file.name, str(dest_path),
                                video_file.stat().st_size, camera_ts,
                                user.id, retention_days, rot_id, group_id)
+            matched_rot_ids.append(rot_id)
             ingested += 1
             logger.info(f"[INGEST][Block] [{i}/{total}] ✔ Copiée avec succès")
 
@@ -207,6 +210,8 @@ def ingest_device(device_node: str, serial: str, db: Session) -> None:
             f"[INGEST][Block] ━━━ Fin ingestion — {user.first_name} {user.last_name} : "
             f"{ingested} copiée(s), {skipped} déjà présente(s), {unmatched} sans rot ━━━"
         )
+        if matched_rot_ids:
+            notify_videos_ready(user, list(set(matched_rot_ids)), db)
 
     except Exception as e:
         db.rollback()
@@ -300,6 +305,7 @@ def ingest_gopro_http(serial: str, db: Session) -> None:
     ingested = skipped = unmatched = 0
     total = len(all_files)
     date_str = datetime.now().strftime("%Y-%m-%d")
+    matched_rot_ids: list[int] = []
 
     for i, (name, cre) in enumerate(video_list, 1):
         match = matches.get(name)
@@ -338,6 +344,7 @@ def ingest_gopro_http(serial: str, db: Session) -> None:
         actual_size = dest_path.stat().st_size
         _save_video_record(db, name, str(dest_path), actual_size,
                            camera_ts, user.id, retention_days, rot_id, group_id)
+        matched_rot_ids.append(rot_id)
         ingested += 1
         logger.info(f"[INGEST][GoPro] [{i}/{total}] ✔ Téléchargée avec succès")
 
@@ -346,6 +353,8 @@ def ingest_gopro_http(serial: str, db: Session) -> None:
         f"[INGEST][GoPro] ━━━ Fin ingestion — {user.first_name} {user.last_name} : "
         f"{ingested} téléchargée(s), {skipped} déjà présente(s), {unmatched} sans rot ━━━"
     )
+    if matched_rot_ids:
+        notify_videos_ready(user, list(set(matched_rot_ids)), db)
 
 
 # ---------------------------------------------------------------------------
@@ -409,6 +418,7 @@ def ingest_mtp_device(serial: str, db: Session) -> None:
         ingested = skipped = unmatched = 0
         total = len(video_files)
         date_str = datetime.now().strftime("%Y-%m-%d")
+        matched_rot_ids: list[int] = []
 
         for i, (folder, name) in enumerate(video_files, 1):
             match = matches.get(name)
@@ -435,6 +445,7 @@ def ingest_mtp_device(serial: str, db: Session) -> None:
             file_size = dest_path.stat().st_size
             _save_video_record(db, name, str(dest_path), file_size,
                                camera_ts, user.id, retention_days, rot_id, group_id)
+            matched_rot_ids.append(rot_id)
             ingested += 1
             logger.info(f"[INGEST][MTP] [{i}/{total}] ✔ Téléchargée avec succès")
 
@@ -443,6 +454,8 @@ def ingest_mtp_device(serial: str, db: Session) -> None:
             f"[INGEST][MTP] ━━━ Fin ingestion — {user.first_name} {user.last_name} : "
             f"{ingested} téléchargée(s), {skipped} déjà présente(s), {unmatched} sans rot ━━━"
         )
+        if matched_rot_ids:
+            notify_videos_ready(user, list(set(matched_rot_ids)), db)
 
     except Exception as e:
         db.rollback()
