@@ -6,7 +6,7 @@ import GestionTab from '../components/GestionTab'
 import ProfileTab from '../components/ProfileTab'
 
 export default function HomePage() {
-  const [previewVideo, setPreviewVideo] = useState(null) // {id, file_name}
+  const [previewVideo, setPreviewVideo] = useState(null)
   const { user, logout } = useAuth()
   const tabs = [
     'Mes vidéos',
@@ -62,19 +62,18 @@ function MyVideosTab({ onPreview }) {
   const [error, setError] = useState('')
   const [view, setView] = useState('rot') // 'rot' | 'list'
   const [search, setSearch] = useState('')
+  const [downloadingIds, setDownloadingIds] = useState(new Set())
 
   useEffect(() => {
     async function load() {
       try {
-        const { data: myRots } = await api.get('/rots/my')
+        // 2 requêtes au lieu de N+1
+        const [{ data: myRots }, { data: byRot }] = await Promise.all([
+          api.get('/rots/my'),
+          api.get('/videos/my-rots'),
+        ])
         setRots(myRots)
-        const entries = await Promise.all(
-          myRots.map(async rot => {
-            const { data } = await api.get(`/videos/rot/${rot.id}`)
-            return [rot.id, data]
-          })
-        )
-        setVideosByRot(Object.fromEntries(entries))
+        setVideosByRot(byRot)
       } catch {
         setError('Impossible de charger vos données.')
       } finally {
@@ -83,6 +82,23 @@ function MyVideosTab({ onPreview }) {
     }
     load()
   }, [])
+
+  function handleDownload(videoId, fileName) {
+    setDownloadingIds(prev => new Set(prev).add(videoId))
+    const token = localStorage.getItem('token')
+    const a = document.createElement('a')
+    a.href = `/api/videos/${videoId}/download?token=${encodeURIComponent(token)}`
+    a.download = fileName
+    a.click()
+    // Réactiver le bouton après 3s (pas d'événement "download complete" fiable)
+    setTimeout(() => {
+      setDownloadingIds(prev => {
+        const next = new Set(prev)
+        next.delete(videoId)
+        return next
+      })
+    }, 3000)
+  }
 
   function formatDate(dateStr) {
     return new Date(dateStr + 'T00:00:00').toLocaleDateString('fr-FR', {
@@ -98,7 +114,7 @@ function MyVideosTab({ onPreview }) {
     return `${(bytes / 1e6).toFixed(0)} Mo`
   }
 
-  // Filtrage : chaque terme doit correspondre à au moins un participant
+  // Filtrage multi-termes sur les participants
   const terms = search.trim().toLowerCase().split(/\s+/).filter(Boolean)
   const filteredRots = terms.length === 0 ? rots : rots.filter(rot =>
     terms.every(term =>
@@ -150,107 +166,163 @@ function MyVideosTab({ onPreview }) {
       </div>
 
       {view === 'list' && (
-        <VideoListView rots={filteredRots} videosByRot={videosByRot} onPreview={onPreview} currentUserId={user.id} />
+        <VideoListView
+          rots={filteredRots}
+          videosByRot={videosByRot}
+          onPreview={onPreview}
+          onDownload={handleDownload}
+          downloadingIds={downloadingIds}
+          currentUserId={user.id}
+        />
       )}
 
       {filteredRots.length === 0 && terms.length > 0 && (
         <p className={styles.searchEmpty}>Aucune rotation ne correspond à votre recherche.</p>
       )}
 
-      {view === 'rot' && <div className={styles.videoContent}>{filteredRots.map(rot => {
-        const myParticipant = rot.participants.find(p => p.user_id === user.id)
-        const myGroupId = myParticipant?.group_id
-        const groupMembers = rot.participants
-          .filter(p => p.group_id === myGroupId)
-          .sort((a, b) => a.afifly_name.localeCompare(b.afifly_name))
-        const rotVideos = videosByRot[rot.id] ?? []
+      {view === 'rot' && (
+        <div className={styles.videoContent}>
+          {filteredRots.map(rot => {
+            const myParticipant = rot.participants.find(p => p.user_id === user.id)
+            const myGroupId = myParticipant?.group_id
+            const groupMembers = rot.participants
+              .filter(p => p.group_id === myGroupId)
+              .sort((a, b) => a.afifly_name.localeCompare(b.afifly_name))
+            const rotVideos = videosByRot[rot.id] ?? []
 
-        return (
-          <section key={rot.id} className={styles.rotSection}>
-            <div className={styles.rotHeader}>
-              <h2 className={styles.rotTitle}>
-                Rot n°{rot.rot_number}
-                {rot.day_number ? ` — saut n°${rot.day_number}` : ''}
-              </h2>
-              <span className={styles.rotMeta}>
-                {formatDate(rot.rot_date)} · {formatTime(rot.rot_time)}
-                {rot.plane_registration ? ` · ${rot.plane_registration}` : ''}
-              </span>
-            </div>
+            return (
+              <section key={rot.id} className={styles.rotSection}>
+                <div className={styles.rotHeader}>
+                  <h2 className={styles.rotTitle}>
+                    Rot n°{rot.rot_number}
+                    {rot.day_number ? ` — saut n°${rot.day_number}` : ''}
+                  </h2>
+                  <span className={styles.rotMeta}>
+                    {formatDate(rot.rot_date)} · {formatTime(rot.rot_time)}
+                    {rot.plane_registration ? ` · ${rot.plane_registration}` : ''}
+                  </span>
+                </div>
 
-            <div className={styles.membersGrid}>
-              {groupMembers.map(member => {
-                const memberVideos = rotVideos.filter(v => v.owner_id === member.user_id)
-                return (
-                  <div key={member.id} className={styles.memberCard}>
-                    <div className={styles.memberName}>
-                      {member.afifly_name}
-                      {member.user_id === user.id && <span className={styles.meTag}>moi</span>}
-                    </div>
-                    {member.level && <span className={styles.memberLevel}>{member.level}</span>}
-                    {memberVideos.length === 0 ? (
-                      <p className={styles.noVideo}>Pas de vidéo</p>
-                    ) : (
-                      <ul className={styles.videoList}>
-                        {memberVideos.map(video => (
-                          <li key={video.id} className={styles.videoItem}>
-                            {video.thumbnail_path && (
-                              <img
-                                src={`/api/videos/${video.id}/thumbnail?token=${encodeURIComponent(localStorage.getItem('token'))}`}
-                                className={styles.videoThumb}
-                                alt=""
-                                onClick={() => onPreview(video)}
+                <div className={styles.membersGrid}>
+                  {groupMembers.map(member => {
+                    const memberVideos = rotVideos.filter(v => v.owner_id === member.user_id)
+                    return (
+                      <div key={member.id} className={styles.memberCard}>
+                        <div className={styles.memberName}>
+                          {member.afifly_name}
+                          {member.user_id === user.id && <span className={styles.meTag}>moi</span>}
+                        </div>
+                        {member.level && <span className={styles.memberLevel}>{member.level}</span>}
+                        {memberVideos.length === 0 ? (
+                          <p className={styles.noVideo}>Pas de vidéo</p>
+                        ) : (
+                          <ul className={styles.videoList}>
+                            {memberVideos.map(video => (
+                              <VideoCard
+                                key={video.id}
+                                video={video}
+                                onPreview={onPreview}
+                                onDownload={handleDownload}
+                                downloading={downloadingIds.has(video.id)}
                               />
-                            )}
-                            <div className={styles.videoInfo}>
-                              <span className={styles.videoName}>{video.file_name}</span>
-                              <span className={styles.videoMeta}>
-                                {video.file_format}
-                                {video.file_size_bytes ? ` · ${formatSize(video.file_size_bytes)}` : ''}
-                              </span>
-                              <div className={styles.videoActions}>
-                                <button
-                                  className={styles.previewBtn}
-                                  onClick={() => onPreview(video)}
-                                >
-                                  Aperçu
-                                </button>
-                                <button
-                                  className={styles.downloadBtn}
-                                  onClick={() => downloadVideo(video.id, video.file_name)}
-                                >
-                                  Télécharger
-                                </button>
-                              </div>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </section>
-        )
-      })}</div>}
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </section>
+            )
+          })}
+        </div>
+      )}
     </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────
+   Carte vidéo individuelle (vue par rotation)
+───────────────────────────────────────────────── */
+function VideoCard({ video, onPreview, onDownload, downloading }) {
+  const token = localStorage.getItem('token')
+
+  function formatVideoTime(isoStr) {
+    if (!isoStr) return ''
+    return new Date(isoStr).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+  }
+
+  function formatSize(bytes) {
+    if (!bytes) return ''
+    if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} Go`
+    return `${(bytes / 1e6).toFixed(0)} Mo`
+  }
+
+  return (
+    <li className={styles.videoItem}>
+      {/* Vignette — placeholder si absente */}
+      <div className={styles.videoThumbWrap} onClick={() => onPreview(video)}>
+        {video.thumbnail_path ? (
+          <img
+            src={`/api/videos/${video.id}/thumbnail?token=${encodeURIComponent(token)}`}
+            className={styles.videoThumb}
+            alt=""
+          />
+        ) : (
+          <div className={styles.videoThumbPlaceholder}>▶</div>
+        )}
+      </div>
+
+      <div className={styles.videoInfo}>
+        {/* Titre lisible : heure de prise de vue */}
+        <span className={styles.videoTitle}>
+          {formatVideoTime(video.camera_timestamp)}
+        </span>
+        <span className={styles.videoMeta}>
+          {video.file_format}
+          {video.file_size_bytes ? ` · ${formatSize(video.file_size_bytes)}` : ''}
+        </span>
+        <span className={styles.videoName}>{video.file_name}</span>
+        <div className={styles.videoActions}>
+          <button
+            className={styles.previewBtn}
+            onClick={() => onPreview(video)}
+          >
+            Aperçu
+          </button>
+          <button
+            className={styles.downloadBtn}
+            onClick={() => onDownload(video.id, video.file_name)}
+            disabled={downloading}
+          >
+            {downloading ? 'Préparation…' : 'Télécharger'}
+          </button>
+        </div>
+      </div>
+    </li>
   )
 }
 
 /* ─────────────────────────────────────────────────
    Vue liste (flat)
 ───────────────────────────────────────────────── */
-function VideoListView({ rots, videosByRot, onPreview, currentUserId }) {
-  // Aplatir toutes les vidéos avec contexte rot + sautant
+function VideoListView({ rots, videosByRot, onPreview, onDownload, downloadingIds, currentUserId }) {
+  const token = localStorage.getItem('token')
   const rows = []
+
   for (const rot of rots) {
     const videos = videosByRot[rot.id] ?? []
     for (const video of videos) {
       const participant = rot.participants.find(p => p.user_id === video.owner_id)
-      rows.push({ rot, video, ownerName: participant?.afifly_name ?? `#${video.owner_id}`, isMe: video.owner_id === currentUserId })
+      rows.push({
+        rot,
+        video,
+        ownerName: participant?.afifly_name ?? `#${video.owner_id}`,
+        isMe: video.owner_id === currentUserId,
+      })
     }
   }
+
   // Tri : rot_date desc, puis heure desc
   rows.sort((a, b) => {
     const d = b.rot.rot_date.localeCompare(a.rot.rot_date)
@@ -263,24 +335,44 @@ function VideoListView({ rots, videosByRot, onPreview, currentUserId }) {
   }
 
   function formatDate(dateStr) {
-    return new Date(dateStr + 'T00:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })
+    return new Date(dateStr + 'T00:00:00').toLocaleDateString('fr-FR', {
+      day: 'numeric', month: 'short', year: 'numeric',
+    })
+  }
+
+  function formatVideoTime(isoStr) {
+    if (!isoStr) return '—'
+    return new Date(isoStr).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
   }
 
   return (
     <table className={styles.table}>
       <thead>
         <tr>
+          <th>Vignette</th>
           <th>Rotation</th>
           <th>Date</th>
-          <th>Heure</th>
+          <th>Heure saut</th>
           <th>Sautant</th>
-          <th>Fichier</th>
+          <th>Heure vidéo</th>
           <th></th>
         </tr>
       </thead>
       <tbody>
         {rows.map(({ rot, video, ownerName, isMe }) => (
           <tr key={video.id}>
+            <td className={styles.thumbCell}>
+              {video.thumbnail_path ? (
+                <img
+                  src={`/api/videos/${video.id}/thumbnail?token=${encodeURIComponent(token)}`}
+                  className={styles.listThumb}
+                  alt=""
+                  onClick={() => onPreview(video)}
+                />
+              ) : (
+                <div className={styles.listThumbPlaceholder} onClick={() => onPreview(video)}>▶</div>
+              )}
+            </td>
             <td>n°{rot.rot_number}</td>
             <td className={styles.muted}>{formatDate(rot.rot_date)}</td>
             <td className={styles.muted}>{rot.rot_time?.slice(0, 5) ?? '—'}</td>
@@ -288,10 +380,17 @@ function VideoListView({ rots, videosByRot, onPreview, currentUserId }) {
               {ownerName}
               {isMe && <span className={styles.meTagSm}>moi</span>}
             </td>
-            <td className={styles.videoFileName}>{video.file_name}</td>
+            <td className={styles.muted}>{formatVideoTime(video.camera_timestamp)}</td>
             <td className={styles.actions}>
               <button className={styles.previewBtn} onClick={() => onPreview(video)}>Aperçu</button>
-              <button className={styles.downloadBtn} style={{ marginLeft: '0.4rem' }} onClick={() => downloadVideo(video.id, video.file_name)}>Télécharger</button>
+              <button
+                className={styles.downloadBtn}
+                style={{ marginLeft: '0.4rem' }}
+                onClick={() => onDownload(video.id, video.file_name)}
+                disabled={downloadingIds.has(video.id)}
+              >
+                {downloadingIds.has(video.id) ? 'Préparation…' : 'Télécharger'}
+              </button>
             </td>
           </tr>
         ))}
@@ -372,11 +471,11 @@ function SettingsTab() {
         </div>
 
         {[
-          ['app_url', "URL de l'application", "Lien inclus dans l'email (ex: http://192.168.1.39).", 'http://192.168.1.39', 'text'],
-          ['smtp_host', 'Serveur SMTP', 'Hôte du serveur d\'envoi (ex: smtp.gmail.com).', 'smtp.gmail.com', 'text'],
-          ['smtp_user', 'Utilisateur SMTP', 'Adresse email utilisée pour l\'authentification.', 'expediteur@gmail.com', 'text'],
-          ['smtp_password', 'Mot de passe SMTP', 'Laissez vide pour ne pas modifier le mot de passe.', '••••••••••••••••', 'password'],
-          ['smtp_from', 'Adresse expéditeur', 'Adresse affichée dans le champ "De".', 'noreply@skydive.fr', 'text'],
+          ['app_url',       "URL de l'application",  "Lien inclus dans l'email (ex: http://192.168.1.39).", 'http://192.168.1.39',   'text'],
+          ['smtp_host',     'Serveur SMTP',           "Hôte du serveur d'envoi (ex: smtp.gmail.com).",      'smtp.gmail.com',        'text'],
+          ['smtp_user',     'Utilisateur SMTP',       "Adresse email pour l'authentification.",              'expediteur@gmail.com',  'text'],
+          ['smtp_password', 'Mot de passe SMTP',      'Laissez vide pour ne pas modifier le mot de passe.', '••••••••••••••••',      'password'],
+          ['smtp_from',     'Adresse expéditeur',     'Adresse affichée dans le champ "De".',               'noreply@skydive.fr',    'text'],
         ].map(([field, label, hint, placeholder, type]) => (
           <div key={field} className={styles.settingRow}>
             <div>
@@ -397,8 +496,8 @@ function SettingsTab() {
           </div>
         </div>
 
-        {error  && <p className={styles.error}>{error}</p>}
-        {saved  && <p className={styles.success}>Paramètres sauvegardés.</p>}
+        {error && <p className={styles.error}>{error}</p>}
+        {saved && <p className={styles.success}>Paramètres sauvegardés.</p>}
 
         <button type="submit" className={styles.primaryBtn} disabled={saving}>
           {saving ? 'Sauvegarde…' : 'Sauvegarder'}
@@ -430,7 +529,6 @@ function VideoPlayerModal({ video, onClose }) {
   const token = localStorage.getItem('token')
   const videoRef = useRef(null)
 
-  // Fermer avec Echap
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', onKey)
@@ -442,7 +540,7 @@ function VideoPlayerModal({ video, onClose }) {
       <div className={styles.playerModal}>
         <div className={styles.playerHeader}>
           <span className={styles.playerTitle}>{video.file_name}</span>
-          <button className={styles.playerClose} onClick={onClose}>✕</button>
+          <button className={styles.playerClose} onClick={onClose} aria-label="Fermer le lecteur">✕</button>
         </div>
         <video
           ref={videoRef}
@@ -455,14 +553,4 @@ function VideoPlayerModal({ video, onClose }) {
       </div>
     </div>
   )
-}
-
-// Téléchargement : navigation directe avec token en query param
-// Permet à nginx de streamer le fichier sans le charger en mémoire
-function downloadVideo(videoId, fileName) {
-  const token = localStorage.getItem('token')
-  const a = document.createElement('a')
-  a.href = `/api/videos/${videoId}/download?token=${encodeURIComponent(token)}`
-  a.download = fileName
-  a.click()
 }

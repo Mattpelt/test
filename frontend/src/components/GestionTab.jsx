@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import styles from '../pages/HomePage.module.css'
+import ConfirmModal from './ConfirmModal'
 
 const SUB_TABS = ['Utilisateurs', 'Rotations', 'Vidéos']
 
@@ -36,6 +37,7 @@ function UsersSubTab() {
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
   const [editUser, setEditUser] = useState(null)
+  const [confirmDialog, setConfirmDialog] = useState(null) // { title, message, onConfirm }
 
   async function load() {
     setLoading(true)
@@ -49,10 +51,17 @@ function UsersSubTab() {
 
   useEffect(() => { load() }, [])
 
-  async function deactivate(id, name) {
-    if (!confirm(`Désactiver le compte de ${name} ?`)) return
-    await api.delete(`/users/${id}`)
-    load()
+  function deactivate(id, name) {
+    setConfirmDialog({
+      title: 'Désactiver le compte',
+      message: `Désactiver le compte de ${name} ? L'utilisateur ne pourra plus se connecter.`,
+      confirmLabel: 'Désactiver',
+      onConfirm: async () => {
+        setConfirmDialog(null)
+        await api.delete(`/users/${id}`)
+        load()
+      },
+    })
   }
 
   async function reactivate(id) {
@@ -60,19 +69,31 @@ function UsersSubTab() {
     load()
   }
 
-  async function hardDelete(id, name) {
-    const confirmed = confirm(
-      `⚠️ SUPPRESSION DÉFINITIVE\n\n` +
-      `Supprimer le compte de ${name} ainsi que TOUTES ses vidéos ?\n\n` +
-      `Cette action est irréversible.`
-    )
-    if (!confirmed) return
-    await api.delete(`/users/${id}/hard`)
-    load()
+  function hardDelete(id, name) {
+    setConfirmDialog({
+      title: 'Suppression définitive',
+      message: `Supprimer le compte de ${name} ainsi que TOUTES ses vidéos ?\n\nCette action est irréversible.`,
+      confirmLabel: 'Supprimer définitivement',
+      onConfirm: async () => {
+        setConfirmDialog(null)
+        await api.delete(`/users/${id}/hard`)
+        load()
+      },
+    })
   }
 
   return (
     <div>
+      {confirmDialog && (
+        <ConfirmModal
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          confirmLabel={confirmDialog.confirmLabel}
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => setConfirmDialog(null)}
+        />
+      )}
+
       <div className={styles.tabBar}>
         <h2 className={styles.tabTitle}>Utilisateurs ({users.length})</h2>
         <button className={styles.primaryBtn} onClick={() => setShowCreate(true)}>+ Nouveau</button>
@@ -264,6 +285,7 @@ function RotsSubTab() {
   const [loading, setLoading] = useState(true)
   const [editRot, setEditRot] = useState(null)
   const [showAdd, setShowAdd] = useState(false)
+  const [confirmDialog, setConfirmDialog] = useState(null)
 
   async function load() {
     setLoading(true)
@@ -277,10 +299,17 @@ function RotsSubTab() {
 
   useEffect(() => { load() }, [])
 
-  async function deleteRot(id, num) {
-    if (!confirm(`Supprimer la rotation n°${num} ? Les vidéos associées seront déliées.`)) return
-    await api.delete(`/rots/${id}`)
-    load()
+  function deleteRot(id, num) {
+    setConfirmDialog({
+      title: 'Supprimer la rotation',
+      message: `Supprimer la rotation n°${num} ? Les vidéos associées seront déliées.`,
+      confirmLabel: 'Supprimer',
+      onConfirm: async () => {
+        setConfirmDialog(null)
+        await api.delete(`/rots/${id}`)
+        load()
+      },
+    })
   }
 
   function formatDate(d) {
@@ -289,6 +318,16 @@ function RotsSubTab() {
 
   return (
     <div>
+      {confirmDialog && (
+        <ConfirmModal
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          confirmLabel={confirmDialog.confirmLabel}
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => setConfirmDialog(null)}
+        />
+      )}
+
       <div className={styles.tabBar}>
         <h2 className={styles.tabTitle}>Rotations ({rots.length})</h2>
         <button className={styles.primaryBtn} onClick={() => setShowAdd(true)}>+ Ajouter une rotation</button>
@@ -728,6 +767,7 @@ function VideosSubTab() {
   const [filterUser, setFilterUser] = useState('')
   const [filterRot, setFilterRot] = useState('')
   const [assignVideo, setAssignVideo] = useState(null)
+  const [confirmDialog, setConfirmDialog] = useState(null)
 
   async function load() {
     setLoading(true)
@@ -750,10 +790,17 @@ function VideosSubTab() {
 
   useEffect(() => { load() }, [filterUser, filterRot])
 
-  async function deleteVideo(id, name) {
-    if (!confirm(`Supprimer la vidéo ${name} ?`)) return
-    await api.delete(`/videos/${id}`)
-    load()
+  function deleteVideo(id, name) {
+    setConfirmDialog({
+      title: 'Supprimer la vidéo',
+      message: `Supprimer la vidéo "${name}" ? Le fichier sera supprimé du disque.`,
+      confirmLabel: 'Supprimer',
+      onConfirm: async () => {
+        setConfirmDialog(null)
+        await api.delete(`/videos/${id}`)
+        load()
+      },
+    })
   }
 
   function formatSize(bytes) {
@@ -778,6 +825,16 @@ function VideosSubTab() {
 
   return (
     <div>
+      {confirmDialog && (
+        <ConfirmModal
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          confirmLabel={confirmDialog.confirmLabel}
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => setConfirmDialog(null)}
+        />
+      )}
+
       <div className={styles.tabBar}>
         <h2 className={styles.tabTitle}>Vidéos ({videos.length})</h2>
         <div className={styles.filters}>

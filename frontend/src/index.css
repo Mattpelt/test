@@ -1,3 +1,21 @@
+/* ── Design tokens ── */
+:root {
+  --color-bg:          #0f172a;  /* slate-900 — fond principal */
+  --color-surface:     #1e293b;  /* slate-800 — cartes, header */
+  --color-border:      #334155;  /* slate-700 — bordures */
+  --color-text:        #f1f5f9;  /* slate-100 — texte primaire */
+  --color-text-2:      #e2e8f0;  /* slate-200 — texte secondaire */
+  --color-muted:       #94a3b8;  /* slate-400 — texte atténué */
+  --color-faint:       #64748b;  /* slate-500 — texte très atténué */
+  --color-dim:         #475569;  /* slate-600 — placeholders */
+  --color-accent:      #3b82f6;  /* blue-500  — action principale */
+  --color-accent-dark: #2563eb;  /* blue-600  — hover accent */
+  --color-accent-bg:   #1e3a5f;  /* fond badge admin */
+  --color-accent-text: #60a5fa;  /* blue-400  — texte accent */
+  --color-danger:      #f87171;  /* red-400   — erreurs */
+  --color-success:     #86efac;  /* green-300 — succès */
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
 }

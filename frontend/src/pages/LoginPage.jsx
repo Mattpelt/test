@@ -4,7 +4,7 @@ import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import styles from './LoginPage.module.css'
 
-const MAX_PIN = 6
+const MAX_PIN = 4
 
 export default function LoginPage() {
   const { login } = useAuth()
@@ -14,7 +14,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const pollRef = useRef(null)
 
-  // Polling : détecte une ou plusieurs caméras inconnues et redirige vers l'onboarding
+  // Polling : détecte une caméra inconnue et redirige vers l'onboarding
   useEffect(() => {
     pollRef.current = setInterval(async () => {
       try {
@@ -34,8 +34,9 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
     try {
-      const user = await login(currentPin)
-      navigate(user.is_admin ? '/admin' : '/', { replace: true })
+      await login(currentPin)
+      // Admin et sautant arrivent tous sur la même HomePage
+      navigate('/', { replace: true })
     } catch {
       setError('PIN incorrect.')
       setPin('')
@@ -46,16 +47,26 @@ export default function LoginPage() {
 
   function pressKey(k) {
     if (loading || pin.length >= MAX_PIN) return
-    setPin(p => p + k)
+    const next = pin + k
+    setPin(next)
+    // Auto-submit dès que le PIN est complet
+    if (next.length === MAX_PIN) handleLogin(next)
   }
 
   function backspace() {
     setPin(p => p.slice(0, -1))
   }
 
-  function confirm() {
-    if (pin.length >= 4) handleLogin(pin)
-  }
+  // Support clavier physique
+  useEffect(() => {
+    function onKey(e) {
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      if (/^[0-9]$/.test(e.key)) pressKey(e.key)
+      else if (e.key === 'Backspace') backspace()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  })
 
   return (
     <div className={styles.wrapper}>
@@ -86,12 +97,14 @@ export default function LoginPage() {
               {n}
             </button>
           ))}
+          {/* Rangée du bas : effacer · 0 · (vide) */}
           <button
-            className={`${styles.key} ${styles.keyConfirm} ${pin.length >= 4 ? styles.keyConfirmActive : ''}`}
-            onClick={confirm}
-            disabled={loading || pin.length < 4}
+            className={styles.keyBack}
+            onClick={backspace}
+            disabled={loading || pin.length === 0}
+            aria-label="Effacer"
           >
-            ✓
+            ⌫
           </button>
           <button
             className={styles.key}
@@ -100,20 +113,14 @@ export default function LoginPage() {
           >
             0
           </button>
-          <button
-            className={styles.keyBack}
-            onClick={backspace}
-            disabled={loading || pin.length === 0}
-          >
-            ⌫
-          </button>
+          <div />
         </div>
 
         <button
           className={styles.newUserBtn}
           onClick={() => navigate('/onboarding')}
         >
-          Je suis nouveau →
+          Nouveau ? Créer mon compte
         </button>
       </div>
     </div>

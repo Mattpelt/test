@@ -3,6 +3,7 @@ import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import styles from '../pages/HomePage.module.css'
 import pStyles from './ProfileTab.module.css'
+import ConfirmModal from './ConfirmModal'
 
 export default function ProfileTab() {
   const { user, setUser } = useAuth()
@@ -189,6 +190,7 @@ function CameraManager({ profile, onChanged }) {
   const [manualSerial, setManualSerial]     = useState('')
   const [error, setError]                   = useState('')
   const [claiming, setClaiming]             = useState(null) // serial en cours
+  const [confirmDialog, setConfirmDialog]   = useState(null)
   const pollRef = useRef(null)
 
   // Charger les caméras enrichies
@@ -245,19 +247,33 @@ function CameraManager({ profile, onChanged }) {
     }
   }
 
-  async function remove(serial) {
-    if (!confirm(`Retirer la caméra ${serial} de votre compte ?`)) return
-    setError('')
-    try {
-      await api.delete(`/users/me/cameras/${encodeURIComponent(serial)}`)
-      onChanged()
-    } catch (err) {
-      setError(err.response?.data?.detail ?? 'Erreur.')
-    }
+  function remove(serial) {
+    setConfirmDialog({
+      serial,
+      onConfirm: async () => {
+        setConfirmDialog(null)
+        setError('')
+        try {
+          await api.delete(`/users/me/cameras/${encodeURIComponent(serial)}`)
+          onChanged()
+        } catch (err) {
+          setError(err.response?.data?.detail ?? 'Erreur.')
+        }
+      },
+    })
   }
 
   return (
     <section className={pStyles.card}>
+      {confirmDialog && (
+        <ConfirmModal
+          title="Retirer la caméra"
+          message={`Retirer la caméra ${confirmDialog.serial} de votre compte ?`}
+          confirmLabel="Retirer"
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => setConfirmDialog(null)}
+        />
+      )}
       <h2 className={pStyles.cardTitle}>Mes caméras</h2>
 
       {/* Caméras associées */}

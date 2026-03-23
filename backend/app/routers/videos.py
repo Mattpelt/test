@@ -51,6 +51,47 @@ def list_videos_by_user(user_id: int, db: Session = Depends(get_db), _: User = D
     )
 
 
+@router.get("/my-rots")
+def list_videos_my_rots(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Retourne toutes les vidéos des rots auxquels participe l'utilisateur connecté,
+    groupées par rot_id. Remplace les N+1 appels GET /videos/rot/{id} côté frontend.
+    Format : { rot_id: [VideoResponse, ...] }
+    """
+    from app.models.rot_participant import RotParticipant
+
+    rot_ids = [
+        row[0]
+        for row in db.query(RotParticipant.rot_id)
+        .filter(RotParticipant.user_id == current_user.id)
+        .distinct()
+        .all()
+    ]
+    if not rot_ids:
+        return {}
+
+    videos = (
+        db.query(Video)
+        .filter(Video.rot_id.in_(rot_ids))
+        .order_by(Video.owner_id, Video.camera_timestamp)
+        .all()
+    )
+
+    result: dict[int, list] = {}
+    for v in videos:
+        result.setdefault(v.rot_id, []).append(v)
+
+    # Sérialisation manuelle pour compatibilité Pydantic v2 + clés int
+    from app.schemas.video import VideoResponse as VR
+    return {
+        rot_id: [VR.model_validate(v).model_dump(mode="json") for v in vids]
+        for rot_id, vids in result.items()
+    }
+
+
 @router.get("/{video_id}", response_model=VideoResponse)
 def get_video(video_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     """Retourne le détail d'une vidéo."""
