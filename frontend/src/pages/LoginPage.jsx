@@ -14,14 +14,14 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const pollRef = useRef(null)
 
-  // Polling : détecte une caméra inconnue et redirige vers l'onboarding
+  // Polling : détecte une ou plusieurs caméras inconnues et redirige vers l'onboarding
   useEffect(() => {
     pollRef.current = setInterval(async () => {
       try {
         const { data } = await api.get('/internal/onboarding/pending')
-        if (data.serial) {
+        if (data.cameras?.length > 0) {
           clearInterval(pollRef.current)
-          navigate(`/onboarding?serial=${encodeURIComponent(data.serial)}`)
+          navigate('/onboarding')
         }
       } catch {
         // silencieux

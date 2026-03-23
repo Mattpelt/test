@@ -259,6 +259,26 @@
 
 .dangerBtn:hover { background: #450a0a; }
 
+.hardDeleteBtn {
+  background: none;
+  border: 1px solid #7f1d1d;
+  border-radius: 4px;
+  color: #fca5a5;
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.6rem;
+  transition: background 0.15s, border-color 0.15s;
+  margin-left: 0.4rem;
+  opacity: 0.5;
+}
+
+.hardDeleteBtn:hover {
+  background: #7f1d1d;
+  border-color: #dc2626;
+  color: #fff;
+  opacity: 1;
+}
+
 /* ── Inline form ── */
 .inlineForm {
   background: #1e293b;

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import styles from './OnboardingPage.module.css'
@@ -7,15 +7,11 @@ import styles from './OnboardingPage.module.css'
 export default function OnboardingPage() {
   const { loginWithToken } = useAuth()
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
 
-  // Serial passé en URL (arrivée automatique depuis LoginPage)
-  const urlSerial = searchParams.get('serial') || ''
-
-  // Serial détecté (URL ou polling en cours de formulaire)
-  const [cameraSerial, setCameraSerial] = useState(urlSerial)
-  // 'waiting' | 'detected' | 'skipped'
-  const [cameraState, setCameraState] = useState(urlSerial ? 'detected' : 'waiting')
+  // Liste des caméras détectées (en attente d'onboarding)
+  const [cameras, setCameras] = useState([])
+  // Serials sélectionnés par l'utilisateur
+  const [selected, setSelected] = useState(new Set())
 
   const [form, setForm] = useState({
     first_name: '', last_name: '', afifly_name: '', email: '',
@@ -25,34 +21,26 @@ export default function OnboardingPage() {
   const [loading, setLoading] = useState(false)
   const pollRef = useRef(null)
 
-  // Polling caméra — uniquement si on est en mode 'waiting'
+  // Polling : mise à jour de la liste des caméras toutes les 2s
   useEffect(() => {
-    if (cameraState !== 'waiting') return
-
-    pollRef.current = setInterval(async () => {
+    async function fetchCameras() {
       try {
         const { data } = await api.get('/internal/onboarding/pending')
-        if (data?.serial) {
-          setCameraSerial(data.serial)
-          setCameraState('detected')
-        }
+        setCameras(data.cameras ?? [])
       } catch { /* silencieux */ }
-    }, 2000)
+    }
 
+    fetchCameras() // appel immédiat au montage
+    pollRef.current = setInterval(fetchCameras, 2000)
     return () => clearInterval(pollRef.current)
-  }, [cameraState])
+  }, [])
 
-  function skipCamera() {
-    clearInterval(pollRef.current)
-    api.delete('/internal/onboarding/pending').catch(() => {})
-    setCameraSerial('')
-    setCameraState('skipped')
-  }
-
-  function removeCamera() {
-    api.delete('/internal/onboarding/pending').catch(() => {})
-    setCameraSerial('')
-    setCameraState('waiting')
+  function toggleCamera(serial) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.has(serial) ? next.delete(serial) : next.add(serial)
+      return next
+    })
   }
 
   function set(field) {
@@ -76,12 +64,12 @@ export default function OnboardingPage() {
     setLoading(true)
     try {
       const payload = {
-        first_name:    form.first_name,
-        last_name:     form.last_name,
-        afifly_name:   form.afifly_name || null,
-        email:         form.email || null,
-        pin:           form.pin,
-        camera_serial: cameraSerial || null,
+        first_name:     form.first_name,
+        last_name:      form.last_name,
+        afifly_name:    form.afifly_name || null,
+        email:          form.email || null,
+        pin:            form.pin,
+        camera_serials: [...selected],
       }
       const { data } = await api.post('/users/onboard', payload)
       await loginWithToken(data.access_token)
@@ -136,42 +124,42 @@ export default function OnboardingPage() {
 
           <div className={styles.divider} />
 
-          {/* Détection caméra */}
+          {/* Section caméras */}
           <div className={styles.cameraSection}>
-            <div className={styles.cameraLabel}>Caméra</div>
+            <div className={styles.cameraHeader}>
+              <span className={styles.cameraLabel}>Mes caméras</span>
+              <span className={styles.cameraHint}>
+                {selected.size > 0
+                  ? `${selected.size} sélectionnée${selected.size > 1 ? 's' : ''}`
+                  : 'Cliquez sur vos caméras pour les associer à votre compte'}
+              </span>
+            </div>
 
-            {cameraState === 'waiting' && (
+            {cameras.length === 0 ? (
               <div className={styles.cameraWaiting}>
                 <span className={styles.pulse} />
                 <div>
                   <div className={styles.cameraWaitingText}>En attente de connexion…</div>
                   <div className={styles.cameraWaitingHint}>
-                    Branchez votre caméra via USB pour l'associer à votre compte.
+                    Branchez vos caméras USB. Elles apparaîtront ici automatiquement.
                   </div>
                 </div>
-                <button type="button" className={styles.skipBtn} onClick={skipCamera}>
-                  Passer cette étape →
-                </button>
               </div>
-            )}
-
-            {cameraState === 'detected' && (
-              <div className={styles.cameraDetected}>
-                <span className={styles.cameraIcon}>✓</span>
-                <div>
-                  <div className={styles.cameraDetectedText}>Caméra détectée</div>
-                  <div className={styles.cameraSerial}>{cameraSerial}</div>
+            ) : (
+              <div className={styles.cameraList}>
+                {cameras.map(cam => (
+                  <CameraCard
+                    key={cam.serial}
+                    camera={cam}
+                    selected={selected.has(cam.serial)}
+                    onToggle={() => toggleCamera(cam.serial)}
+                  />
+                ))}
+                {/* Indicateur "en attente d'autres caméras" */}
+                <div className={styles.cameraMoreHint}>
+                  <span className={styles.pulseSmall} />
+                  <span>En attente d'autres caméras…</span>
                 </div>
-                <button type="button" className={styles.removeBtn} onClick={removeCamera}>Retirer</button>
-              </div>
-            )}
-
-            {cameraState === 'skipped' && (
-              <div className={styles.cameraSkipped}>
-                <span className={styles.cameraSkippedText}>Aucune caméra associée</span>
-                <button type="button" className={styles.skipBtn} onClick={() => setCameraState('waiting')}>
-                  ↺ Détecter
-                </button>
               </div>
             )}
           </div>
@@ -220,4 +208,44 @@ export default function OnboardingPage() {
       </div>
     </div>
   )
+}
+
+/* ─────────────────────────────────────────────────
+   Carte caméra individuelle
+───────────────────────────────────────────────── */
+function CameraCard({ camera, selected, onToggle }) {
+  const [elapsed, setElapsed] = useState(getElapsed(camera.connected_at))
+
+  // Met à jour l'affichage "branché depuis X min" chaque minute
+  useEffect(() => {
+    const id = setInterval(() => setElapsed(getElapsed(camera.connected_at)), 30000)
+    return () => clearInterval(id)
+  }, [camera.connected_at])
+
+  return (
+    <button
+      type="button"
+      className={`${styles.cameraCard} ${selected ? styles.cameraCardSelected : ''}`}
+      onClick={onToggle}
+    >
+      <div className={styles.cameraCardIcon}>
+        {selected ? '✓' : '○'}
+      </div>
+      <div className={styles.cameraCardBody}>
+        <div className={styles.cameraCardModel}>{camera.model_name}</div>
+        <div className={styles.cameraCardSerial}>Série : {camera.serial}</div>
+        <div className={styles.cameraCardTime}>{elapsed}</div>
+      </div>
+      <div className={styles.cameraCardLed} />
+    </button>
+  )
+}
+
+function getElapsed(isoDate) {
+  if (!isoDate) return ''
+  const diff = Math.floor((Date.now() - new Date(isoDate).getTime()) / 1000)
+  if (diff < 60)  return 'Branché à l\'instant'
+  if (diff < 120) return 'Branché depuis 1 minute'
+  if (diff < 3600) return `Branché depuis ${Math.floor(diff / 60)} minutes`
+  return `Branché depuis ${Math.floor(diff / 3600)}h`
 }

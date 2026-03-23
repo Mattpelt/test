@@ -1,11 +1,14 @@
 import logging
+import os
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.auth import create_access_token, pin_to_lookup_hash, require_admin
 from app.database import get_db
+from app.models.rot_participant import RotParticipant
 from app.models.user import User
+from app.models.video import Video
 from app.schemas.user import OnboardingRequest, UserCreate, UserResponse, UserUpdate, UserUpdateCameras
 
 router = APIRouter(prefix="/users", tags=["Utilisateurs"])
@@ -63,11 +66,11 @@ def onboard(payload: OnboardingRequest, db: Session = Depends(get_db)):
     """
     Crée un compte depuis le kiosque (self-service, sans authentification).
     PIN : exactement 4 chiffres.
-    Si un serial caméra est fourni, il est associé au compte et l'ingestion démarre.
+    Les serials sélectionnés par l'utilisateur sont associés et l'ingestion démarre.
     """
-    from app.routers.internal import clear_pending_onboarding, get_pending_onboarding
-    from app.services.video_ingestor import ingest_device, ingest_gopro_http, ingest_mtp_device
     import threading
+    from app.routers.internal import get_pending_cameras, remove_pending_camera
+    from app.services.video_ingestor import ingest_device, ingest_gopro_http, ingest_mtp_device
 
     _validate_pin(payload.pin, is_admin=False)
     if payload.email and db.query(User).filter(User.email == payload.email).first():
@@ -75,44 +78,48 @@ def onboard(payload: OnboardingRequest, db: Session = Depends(get_db)):
     lookup = pin_to_lookup_hash(payload.pin)
     _pin_unique(lookup, db)
 
-    serial = payload.camera_serial
     user = User(
         first_name=payload.first_name,
         last_name=payload.last_name,
         email=payload.email or None,
         pin_lookup_hash=lookup,
         afifly_name=payload.afifly_name or None,
-        camera_serials=[serial] if serial else [],
+        camera_serials=list(payload.camera_serials),
         is_admin=False,
     )
     db.add(user)
     db.commit()
     db.refresh(user)
-    logger.info(f"[ONBOARDING] Compte créé : {user.first_name} {user.last_name} (id={user.id}, serial={serial})")
+    logger.info(
+        f"[ONBOARDING] Compte créé : {user.first_name} {user.last_name} "
+        f"(id={user.id}, serials={payload.camera_serials})"
+    )
 
-    # Lancer l'ingestion en arrière-plan si un serial est associé
-    if serial:
-        pending = get_pending_onboarding()
-        if pending and pending.get("serial") == serial:
-            mtp = pending.get("mtp", False)
-            vendor_id = pending.get("vendor_id")
-            device_node = pending.get("device_node")
+    # Pour chaque serial sélectionné, démarrer l'ingestion si la caméra est en attente
+    pending_map = {c["serial"]: c for c in get_pending_cameras()}
+    for serial in payload.camera_serials:
+        cam = pending_map.get(serial)
+        if not cam:
+            continue
+        mtp         = cam.get("mtp", False)
+        vendor_id   = cam.get("vendor_id")
+        device_node = cam.get("device_node")
 
-            def run_ingestion():
-                from app.database import SessionLocal
-                idb = SessionLocal()
-                try:
-                    if mtp and vendor_id == "2672":
-                        ingest_gopro_http(serial=serial, db=idb)
-                    elif mtp:
-                        ingest_mtp_device(serial=serial, db=idb)
-                    elif device_node:
-                        ingest_device(device_node=device_node, serial=serial, db=idb)
-                finally:
-                    idb.close()
+        def _run(s=serial, m=mtp, v=vendor_id, d=device_node):
+            from app.database import SessionLocal
+            idb = SessionLocal()
+            try:
+                if m and v == "2672":
+                    ingest_gopro_http(serial=s, db=idb)
+                elif m:
+                    ingest_mtp_device(serial=s, db=idb)
+                elif d:
+                    ingest_device(device_node=d, serial=s, db=idb)
+            finally:
+                idb.close()
 
-            threading.Thread(target=run_ingestion, daemon=True).start()
-            clear_pending_onboarding()
+        threading.Thread(target=_run, daemon=True).start()
+        remove_pending_camera(serial)
 
     token = create_access_token(user.id)
     return {
@@ -201,3 +208,30 @@ def deactivate_user(user_id: int, db: Session = Depends(get_db), _: User = Depen
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sautant introuvable.")
     user.is_active = False
     db.commit()
+
+
+@router.delete("/{user_id}/hard", status_code=status.HTTP_204_NO_CONTENT)
+def hard_delete_user(user_id: int, db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    """
+    Supprime définitivement un compte sautant ainsi que toutes ses vidéos (fichiers + DB)
+    et ses participations aux rotations.
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sautant introuvable.")
+
+    # Supprimer les fichiers vidéo sur disque
+    videos = db.query(Video).filter(Video.owner_id == user_id).all()
+    for v in videos:
+        if v.file_path and os.path.exists(v.file_path):
+            try:
+                os.unlink(v.file_path)
+            except OSError:
+                pass
+
+    # Supprimer les enregistrements DB liés
+    db.query(Video).filter(Video.owner_id == user_id).delete()
+    db.query(RotParticipant).filter(RotParticipant.user_id == user_id).delete()
+    db.delete(user)
+    db.commit()
+    logger.info(f"[USERS] Compte supprimé définitivement : id={user_id}")

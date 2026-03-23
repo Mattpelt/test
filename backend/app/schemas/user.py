@@ -18,8 +18,8 @@ class OnboardingRequest(BaseModel):
     last_name:       str
     email:           str | None = None
     afifly_name:     str | None = None
-    pin:             str           # exactement 4 chiffres
-    camera_serial:   str | None = None  # serial détecté automatiquement
+    pin:             str                    # exactement 4 chiffres
+    camera_serials:  list[str] = []         # serials sélectionnés par l'utilisateur
 
 
 class UserUpdate(BaseModel):

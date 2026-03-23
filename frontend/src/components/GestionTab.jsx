@@ -60,6 +60,17 @@ function UsersSubTab() {
     load()
   }
 
+  async function hardDelete(id, name) {
+    const confirmed = confirm(
+      `⚠️ SUPPRESSION DÉFINITIVE\n\n` +
+      `Supprimer le compte de ${name} ainsi que TOUTES ses vidéos ?\n\n` +
+      `Cette action est irréversible.`
+    )
+    if (!confirmed) return
+    await api.delete(`/users/${id}/hard`)
+    load()
+  }
+
   return (
     <div>
       <div className={styles.tabBar}>
@@ -120,6 +131,7 @@ function UsersSubTab() {
                     ? <button className={styles.dangerBtn} onClick={() => deactivate(u.id, `${u.first_name} ${u.last_name}`)}>Désactiver</button>
                     : <button className={styles.secondaryBtn} onClick={() => reactivate(u.id)}>Réactiver</button>
                   }
+                  <button className={styles.hardDeleteBtn} onClick={() => hardDelete(u.id, `${u.first_name} ${u.last_name}`)}>Supprimer</button>
                 </td>
               </tr>
             ))}
