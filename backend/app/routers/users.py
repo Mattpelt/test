@@ -176,10 +176,15 @@ def get_my_cameras(db: Session = Depends(get_db), current_user: User = Depends(g
     result = []
     for serial in current_user.camera_serials:
         cam = db.query(Camera).filter(Camera.serial == serial).first()
+        make  = cam.make  if cam else None
+        model = cam.model if cam else None
+        # Déduction heuristique si pas encore en DB
+        if not make and not model and serial in ("0001", "0000"):
+            make = "Insta360"
         result.append({
             "serial": serial,
-            "make": cam.make if cam else None,
-            "model": cam.model if cam else None,
+            "make": make,
+            "model": model,
             "usb_serial": cam.usb_serial if cam else None,
         })
     return result

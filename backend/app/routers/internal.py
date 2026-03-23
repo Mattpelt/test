@@ -78,6 +78,7 @@ def camera_connected(event: CameraEvent):
     )
 
     from app.models.camera import Camera
+    from app.services.video_ingestor import _parse_model_string, _upsert_camera
 
     db = SessionLocal()
     try:
@@ -85,11 +86,17 @@ def camera_connected(event: CameraEvent):
             User.camera_serials.contains([event.serial]),
             User.is_active == True,
         ).first()
-        # Enrichir le model_name depuis la table cameras si disponible
+
+        # Persister les métadonnées connues au moment de la connexion
+        if event.model_name or event.vendor_id:
+            make, model = _parse_model_string(event.model_name)
+            if not make and event.vendor_id == "2672":
+                make = "GoPro"
+            _upsert_camera(db, event.serial, make=make, model=model, vendor_id=event.vendor_id)
+            db.commit()
+
+        # Enrichir le model_name depuis la table cameras
         cam_record = db.query(Camera).filter(Camera.serial == event.serial).first()
-        if cam_record is None and event.vendor_id == "2672":
-            # GoPro : chercher aussi via usb_serial si le serial n'est pas encore connu
-            cam_record = db.query(Camera).filter(Camera.usb_serial == event.serial).first()
         if cam_record and (cam_record.make or cam_record.model):
             enriched_model = " ".join(filter(None, [cam_record.make, cam_record.model]))
         else:
