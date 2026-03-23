@@ -106,6 +106,7 @@ POSTGRES_PASSWORD=<mot_de_passe_fort>
 POSTGRES_DB=skydivemediahub
 DATABASE_URL=postgresql://skydive:<mot_de_passe_fort>@db:5432/skydivemediahub
 VIDEO_STORAGE_PATH=/mnt/hdd_videos
+SECRET_KEY=<64_hex_chars>
 N8N_USER=admin
 N8N_PASSWORD=<mot_de_passe_fort>
 ```
@@ -115,6 +116,7 @@ N8N_PASSWORD=<mot_de_passe_fort>
 | `POSTGRES_PASSWORD` | Mot de passe PostgreSQL — choisir un mot de passe fort |
 | `DATABASE_URL` | Même mot de passe que `POSTGRES_PASSWORD` |
 | `VIDEO_STORAGE_PATH` | Chemin de montage du HDD de stockage vidéo |
+| `SECRET_KEY` | Clé de signature JWT (64 hex chars — généré par setup.sh) |
 | `N8N_USER` | Login de l'interface n8n (défaut : `admin`) |
 | `N8N_PASSWORD` | Mot de passe de l'interface n8n |
 
@@ -146,17 +148,18 @@ Vérification :
 docker compose ps
 ```
 
-Les trois services doivent être actifs :
+Les quatre services doivent être actifs :
 ```
-NAME                         STATUS
-skydivemediahub-db-1         running (healthy)
-skydivemediahub-backend-1    running
-skydivemediahub-n8n-1        running
+NAME                           STATUS
+skydivemediahub-db-1           running (healthy)
+skydivemediahub-backend-1      running
+skydivemediahub-frontend-1     running
+skydivemediahub-n8n-1          running
 ```
 
 ---
 
-## Étape 8 — Vérifier que l'API répond
+## Étape 8 — Vérifier que l'application répond
 
 ```bash
 curl http://localhost:8000/health
@@ -164,13 +167,48 @@ curl http://localhost:8000/health
 
 Depuis un navigateur sur le réseau local :
 ```
+http://192.168.1.39              → Interface web (login / sautants / admin)
 http://192.168.1.39:8000/docs    → Swagger UI (API backend)
 http://192.168.1.39:5678         → Interface n8n (automatisations)
 ```
 
 ---
 
-## Étape 9 — Configurer la détection automatique de caméra (règle udev)
+## Étape 9 — Créer le premier compte administrateur
+
+Une fois l'application démarrée, créez le compte admin initial :
+
+```bash
+docker compose exec backend python -c "
+from app.database import SessionLocal
+from app.models.user import User
+from passlib.context import CryptContext
+
+db = SessionLocal()
+pwd = CryptContext(schemes=['bcrypt'], deprecated='auto')
+user = User(
+    first_name='Admin',
+    last_name='SkyDive',
+    email='admin@skydive.fr',
+    password_hash=pwd.hash('MotDePassefort!'),
+    camera_serials=[],
+    is_admin=True,
+    is_active=True,
+)
+db.add(user)
+db.commit()
+print('Admin créé.')
+db.close()
+"
+```
+
+> Remplacez `admin@skydive.fr` et `MotDePassefort!` par vos propres valeurs.
+
+Connectez-vous ensuite sur `http://192.168.1.39` avec ces identifiants.
+
+---
+
+## Étape 10 — Configurer la détection automatique de caméra (règle udev)
 
 Cette étape permet au PC de détecter une caméra branchée en USB et de lancer l'ingestion automatiquement.
 
@@ -221,26 +259,26 @@ sudo udevadm control --reload-rules
 
 ---
 
-## Étape 10 — Configurer n8n (ingestion automatique des PDFs Afifly)
+## Étape 11 — Configurer n8n (ingestion automatique des PDFs Afifly)
 
 n8n est l'outil d'automatisation qui surveille la boîte Gmail et envoie les PDFs Afifly reçus au backend.
 
 Le workflow est automatiquement importé au démarrage de n8n, mais les credentials Gmail doivent être configurés manuellement une seule fois.
 
-### 10.1 — Accéder à n8n
+### 11.1 — Accéder à n8n
 
 Ouvrir dans un navigateur : `http://192.168.1.39:5678`
 
 Se connecter avec les identifiants définis dans le `.env` (`N8N_USER` / `N8N_PASSWORD`).
 
-### 10.2 — Importer le workflow
+### 11.2 — Importer le workflow
 
 1. Dans n8n, cliquer sur **"Add workflow"** → **"Import from file"** (ou via le menu ⋮)
 2. Sélectionner le fichier `n8n/workflows/gmail_pdf_afifly.json` présent dans le repo
    > Sur le serveur, ce fichier se trouve dans `~/skydivemediahub/n8n/workflows/gmail_pdf_afifly.json`
 3. Le workflow *"gmail PDF Afifly poster"* apparaît dans la liste
 
-### 10.3 — Configurer les credentials Gmail (IMAP)
+### 11.3 — Configurer les credentials Gmail (IMAP)
 
 Le workflow importé est inactif et sans credentials.
 
@@ -267,7 +305,7 @@ Le workflow importé est inactif et sans credentials.
 
 5. Cliquer **Test** pour vérifier la connexion, puis **Save**
 
-### 10.4 — Activer le workflow
+### 11.4 — Activer le workflow
 
 De retour sur la liste des workflows (`http://192.168.1.39:5678/home/workflows`) :
 
@@ -276,7 +314,7 @@ De retour sur la liste des workflows (`http://192.168.1.39:5678/home/workflows`)
 
 Le workflow surveille la boîte Gmail en continu et transmet automatiquement chaque PDF Afifly reçu au backend.
 
-### 10.5 — Tester
+### 11.5 — Tester
 
 Envoyer un email avec un PDF Afifly en pièce jointe à l'adresse Gmail configurée.
 Dans les logs du backend, vérifier que le rot a bien été créé :
@@ -297,7 +335,31 @@ Si le rot existait déjà (doublon) :
 
 ---
 
-## Étape 11 — Mises à jour du code
+## Étape 12 — Configurer les notifications email (optionnel)
+
+Les notifications email se configurent depuis l'interface admin, sans redémarrage.
+
+1. Se connecter sur `http://192.168.1.39/admin` (compte admin)
+2. Onglet **Paramètres** → section **Notifications email**
+3. Renseigner les champs SMTP :
+
+| Champ | Exemple (Gmail) |
+|---|---|
+| Serveur SMTP | `smtp.gmail.com` |
+| Port | `587` |
+| Utilisateur | `votre@gmail.com` |
+| Mot de passe | App Password Gmail (16 caractères) |
+| Adresse expéditeur | `noreply@skydive.fr` |
+| URL application | `http://192.168.1.39` |
+
+4. Activer le toggle **"Activer les notifications"**
+5. Cliquer **Sauvegarder**
+
+> Si le SMTP n'est pas configuré, l'ingestion fonctionne normalement — aucun email n'est envoyé.
+
+---
+
+## Étape 13 — Mises à jour du code
 
 Pour déployer une nouvelle version depuis GitHub :
 
@@ -346,6 +408,7 @@ tail -f /tmp/skydive-camera.log
 | Composant | Adresse |
 |---|---|
 | PC pupitre | `192.168.1.39` |
+| Interface web | `http://192.168.1.39` |
 | API backend | `http://192.168.1.39:8000` |
 | Swagger UI | `http://192.168.1.39:8000/docs` |
 | n8n | `http://192.168.1.39:5678` |
@@ -360,22 +423,36 @@ tail -f /tmp/skydive-camera.log
 skydivemediahub/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py               # Point d'entrée FastAPI + migrations
+│   │   ├── main.py               # Point d'entrée FastAPI + migrations + scheduler
+│   │   ├── auth.py               # JWT : login, middleware, get_current_user
 │   │   ├── database.py           # Connexion PostgreSQL / SQLAlchemy
 │   │   ├── models/               # Tables : users, rots, rot_participants, videos, settings
-│   │   ├── schemas/              # Schémas Pydantic (validation API)
-│   │   ├── routers/              # Endpoints : users, rots, videos, internal, settings
+│   │   ├── routers/              # Endpoints : auth, users, rots, videos, internal, settings
 │   │   └── services/             # Logique métier
 │   │       ├── pdf_parser.py     # Parsing PDF Afifly (pdfplumber)
 │   │       ├── video_ingestor.py # Ingestion caméra (GoPro HTTP / MTP / block)
 │   │       ├── matcher.py        # Matching vidéo ↔ rot par horodatage
 │   │       ├── rot_service.py    # Création / upsert des rots en base
-│   │       └── usb_watcher.py   # Surveillance USB via pyudev
+│   │       ├── retention.py      # Nettoyage des vidéos expirées (03:00)
+│   │       ├── notifier.py       # Notifications email (smtplib STARTTLS)
+│   │       └── usb_watcher.py    # Surveillance USB via pyudev
 │   ├── Dockerfile
 │   └── requirements.txt
+├── frontend/
+│   ├── src/
+│   │   ├── main.jsx              # Point d'entrée React
+│   │   ├── App.jsx               # Routage (React Router)
+│   │   ├── api/client.js         # Instance Axios + intercepteur JWT
+│   │   ├── context/AuthContext.jsx
+│   │   └── pages/
+│   │       ├── LoginPage.jsx
+│   │       ├── HomePage.jsx      # Vue sautant
+│   │       └── AdminPage.jsx     # Dashboard admin
+│   ├── nginx.conf                # Proxy /api/ + X-Accel-Redirect
+│   └── Dockerfile                # Build multi-stage Node 20 → nginx
 ├── n8n/
 │   └── workflows/
-│       └── gmail_pdf_afifly.json # Workflow importé automatiquement au démarrage
+│       └── gmail_pdf_afifly.json # Workflow à importer manuellement dans n8n
 ├── docker-compose.yml
 ├── setup.sh                      # Script d'installation automatique
 ├── .env                          # Configuration locale (jamais committé)
@@ -387,15 +464,18 @@ skydivemediahub/
 
 ## Endpoints API principaux
 
-| Méthode | Endpoint | Description |
-|---|---|---|
-| POST | `/rots` | Upload PDF Afifly → parse + sauvegarde |
-| POST | `/rots/json` | Créer un rot depuis JSON (sans PDF) |
-| GET | `/rots` | Lister toutes les rotations |
-| GET | `/rots/{id}` | Détail d'une rotation |
-| POST | `/users` | Créer un compte sautant |
-| PATCH | `/users/{id}/cameras` | Associer des numéros de série caméra |
-| GET | `/videos/user/{id}` | Vidéos d'un sautant |
-| GET | `/settings` | Lire la configuration |
-| PATCH | `/settings` | Modifier la configuration |
-| POST | `/internal/camera-connected` | Déclencheur d'ingestion (appelé par udev) |
+| Méthode | Endpoint | Auth | Description |
+|---|---|---|---|
+| POST | `/auth/login` | public | Connexion → JWT |
+| GET | `/auth/me` | JWT | Profil utilisateur connecté |
+| POST | `/users` | admin | Créer un compte sautant |
+| PATCH | `/users/{id}/cameras` | admin | Associer des numéros de série caméra |
+| POST | `/rots` | admin | Upload PDF Afifly → parse + upsert |
+| GET | `/rots` | JWT | Lister toutes les rotations |
+| GET | `/rots/{id}` | JWT | Détail d'une rotation |
+| GET | `/videos/user/{id}` | JWT | Vidéos d'un sautant |
+| GET | `/videos/rot/{id}` | JWT | Toutes les vidéos d'un rot |
+| GET | `/videos/{id}/download` | JWT | Téléchargement (X-Accel-Redirect) |
+| GET | `/settings` | admin | Lire la configuration |
+| PATCH | `/settings` | admin | Modifier la configuration (dont SMTP) |
+| POST | `/internal/camera-connected` | public | Déclencheur d'ingestion (udev) |

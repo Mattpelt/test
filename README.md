@@ -291,11 +291,25 @@ PO-10 ✓ Moteur de matching vidéo ↔ rot — VALIDÉ
 PO-11 ✓ Ingestion automatique PDF Afifly via email — VALIDÉ
         Solution retenue : n8n (IMAP trigger → POST /rots).
         Workflow versionné dans n8n/workflows/gmail_pdf_afifly.json.
-        Importé automatiquement au démarrage de n8n.
+        Importé manuellement une fois via l'interface n8n.
 
-PO-12 : Notifications email (F13) — À FAIRE
-PO-13 : Nettoyage rétention automatique (F22) — À FAIRE
-PO-14 : Frontend — À FAIRE
+PO-12 ✓ Notifications email (F13) — IMPLÉMENTÉ
+        Email HTML envoyé au sautant après ingestion d'une vidéo
+        associée à un rot. Configurable via l'onglet Paramètres de
+        l'admin (SMTP + toggle on/off). Non encore testé en conditions
+        réelles (test terrain à planifier).
+
+PO-13 ✓ Nettoyage rétention automatique (F22) — VALIDÉ
+        APScheduler lance cleanup_expired_videos() à 03:00 chaque
+        jour. Durée de rétention configurable dans les Paramètres.
+
+PO-14 ✓ Frontend — VALIDÉ
+        React 18 + Vite + React Router, servi par nginx (port 80).
+        Authentification JWT (7 jours). Pages :
+          - /login     — connexion email / mot de passe
+          - /          — vue sautant : vidéos par rot, téléchargement
+          - /admin     — gestion sautants, rotations, paramètres
+        Accessible depuis : http://192.168.1.39
 
 
 ========================================================
@@ -332,7 +346,9 @@ SATA internes dont le chemin de montage est configurable.
   [HDDs SATA : stockage vidéos]
        |
        v
-  [Interface Web — phase ultérieure]
+  [nginx/Frontend — port 80]  ←→  navigateur sautant / pupitre kiosque
+
+  [Gmail IMAP] → [n8n port 5678] → POST /rots → parsing PDF Afifly
 
 
 8.2 ENVIRONNEMENT DE DÉVELOPPEMENT
@@ -349,16 +365,19 @@ API accessible à : http://192.168.1.97:8000
 Swagger UI       : http://192.168.1.97:8000/docs
 
 
-8.3 COMPOSANTS BACKEND
------------------------
-Langage      : Python 3.11+
-Framework    : FastAPI (API REST)
-ORM          : SQLAlchemy
+8.3 COMPOSANTS
+---------------
+Backend      : Python 3.11+ / FastAPI / SQLAlchemy
 PDF parsing  : pdfplumber (extraction contenu + géométrie)
 USB detect   : udev HOST → HTTP (voir 8.7)
 MTP/PTP      : gphoto2 (caméras non-GoPro)
 GoPro        : Open GoPro HTTP API (voir 8.7)
 Email/PDF    : n8n (IMAP trigger → POST /rots) — voir 8.10
+Scheduler    : APScheduler (rétention vidéos — 03:00 quotidien)
+Auth         : JWT (python-jose + passlib bcrypt, 7 jours)
+Notif email  : smtplib stdlib (STARTTLS, configurable en admin)
+Frontend     : React 18 + Vite + React Router (voir 8.11)
+Reverse proxy: nginx (port 80) — sert le frontend + proxy /api/
 
 
 8.4 BASE DE DONNÉES
@@ -435,21 +454,34 @@ TABLE : settings (une seule ligne, initialisée au démarrage)
   id                        SERIAL PRIMARY KEY
   retention_days            INTEGER DEFAULT 90
   matching_window_minutes   INTEGER DEFAULT 45
+  jump_target_delta_min     INTEGER DEFAULT 30
+  jump_window_hours         INTEGER DEFAULT 2
   video_storage_path        TEXT DEFAULT '/mnt/videos'
+  notifications_enabled     BOOLEAN DEFAULT FALSE
+  app_url                   TEXT DEFAULT 'http://192.168.1.39'
+  smtp_host                 TEXT
+  smtp_port                 INTEGER DEFAULT 587
+  smtp_user                 TEXT
+  smtp_password             TEXT
+  smtp_from                 TEXT
   updated_at                TIMESTAMP DEFAULT NOW()
 
 
 8.6 ENDPOINTS API IMPLÉMENTÉS
 -------------------------------
 
-/users
+/auth  (public)
+  POST   /auth/login               — connexion → JWT (email: str, password: str)
+  GET    /auth/me                  — profil utilisateur connecté (JWT requis)
+
+/users  (JWT admin requis)
   POST   /users                    — créer un compte
   GET    /users                    — lister tous les sautants actifs
   GET    /users/{id}               — détail d'un sautant
   PATCH  /users/{id}/cameras       — associer numéros de série caméras
   DELETE /users/{id}               — désactiver (soft delete)
 
-/rots
+/rots  (JWT requis — écriture admin)
   POST   /rots/debug-pdf           — diagnostic PDF brut (outil de dev)
   POST   /rots/parse-preview       — parser PDF sans sauvegarder
   POST   /rots                     — parser PDF et upsert en DB (utilisé par n8n)
@@ -457,19 +489,20 @@ TABLE : settings (une seule ligne, initialisée au démarrage)
   GET    /rots                     — lister toutes les rotations
   GET    /rots/{id}                — détail d'une rotation
 
-/videos
+/videos  (JWT requis)
   GET    /videos                   — lister toutes les vidéos
   GET    /videos/user/{user_id}    — vidéos d'un sautant
+  GET    /videos/rot/{rot_id}      — vidéos d'un rot (tous propriétaires)
   GET    /videos/{id}              — détail d'une vidéo
+  GET    /videos/{id}/download     — téléchargement (X-Accel-Redirect nginx)
   DELETE /videos/{id}              — supprimer une vidéo
 
-/settings
+/settings  (JWT admin requis)
   GET    /settings                 — lire la configuration
-  PATCH  /settings                 — modifier la configuration
+  PATCH  /settings                 — modifier la configuration (dont SMTP)
 
-/internal
+/internal  (public — appelé par udev sur l'hôte)
   POST   /internal/camera-connected — déclencheur d'ingestion
-                                      (appelé par règle udev hôte)
 
 
 8.7 ARCHITECTURE DÉTECTION ET INGESTION CAMÉRA
@@ -602,12 +635,18 @@ VALIDATION SUR PDFs RÉELS :
                        libgphoto2-dev, gphoto2
     Packages Python  : voir requirements.txt
 
+  service : frontend
+    Image     : nginx:alpine (build multi-stage Node 20 + nginx)
+    Port      : 80 (public)
+    Proxy     : /api/* → backend:8000
+    X-Accel   : /protected-videos/ → volume vidéos (téléchargement direct)
+    Auth      : JWT — toutes les pages protégées sauf /login
+
   service : n8n
     Image     : n8nio/n8n (dernière version stable)
     Port      : 5678
     Volume    : n8n_data (credentials + historique exécutions)
     Volume    : ./n8n/workflows (workflows versionnés)
-    Import    : gmail_pdf_afifly.json importé au démarrage
     Auth      : basic auth (N8N_USER / N8N_PASSWORD)
 
   DÉMARRAGE :
@@ -617,10 +656,56 @@ VALIDATION SUR PDFs RÉELS :
     DATABASE_URL=postgresql://...
     POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB
     VIDEO_STORAGE_PATH=/mnt/videos
+    SECRET_KEY=<hex 64 chars — généré par setup.sh>
     N8N_USER, N8N_PASSWORD
 
 
-8.10 FLEXIBILITÉ MATÉRIELLE
+8.10 NOTIFICATIONS EMAIL (PO-12)
+---------------------------------
+Après chaque ingestion de vidéo(s) matchée(s), le backend envoie un
+email récapitulatif au sautant (un email par session, groupé par rot).
+
+CONFIGURATION (onglet Paramètres de l'admin) :
+  - Activer les notifications : toggle on/off
+  - Serveur SMTP    : ex. smtp.gmail.com
+  - Port SMTP       : 587 (STARTTLS recommandé)
+  - Utilisateur     : adresse d'envoi
+  - Mot de passe    : App Password si Gmail
+  - Adresse "De"    : ex. noreply@skydive.fr
+  - URL application : lien inclus dans le mail (ex. http://192.168.1.39)
+
+COMPORTEMENT :
+  Si notifications_enabled = false ou smtp_host vide → aucun email,
+  log silencieux. L'ingestion n'est jamais bloquée par l'envoi d'email.
+
+
+8.11 FRONTEND (PO-14)
+----------------------
+Stack    : React 18, Vite, React Router v6, Axios
+Auth     : JWT stocké en localStorage (7 jours)
+Serveur  : nginx (port 80) — build multi-stage dans frontend/
+
+ROUTES :
+  /login   → LoginPage  (public)
+  /        → HomePage   (sautant — JWT requis)
+  /admin   → AdminPage  (admin uniquement — JWT + is_admin requis)
+
+PAGES :
+  LoginPage  — formulaire email/mot de passe, redirect /admin si is_admin
+  HomePage   — liste des rots du sautant, membres du groupe,
+               vidéos par membre avec bouton téléchargement
+  AdminPage  — 3 onglets :
+    · Sautants   : liste + création + désactivation
+    · Rotations  : liste de tous les rots parsés
+    · Paramètres : matching, rétention, SMTP notifications
+
+NGINX CONFIG (frontend/nginx.conf) :
+  location /api/              → proxy_pass http://backend:8000/
+  location /protected-videos/ → internal (X-Accel-Redirect)
+  location /                  → try_files $uri /index.html (SPA)
+
+
+8.12 FLEXIBILITÉ MATÉRIELLE
 -----------------------------
 Le système est conçu pour fonctionner sur tout PC Ubuntu,
 quel que soit le fabricant (Lenovo, HP, Dell, etc.).
