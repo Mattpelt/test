@@ -64,7 +64,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://backend:8000/rots",
+        "url": "http://backend:8000/internal/rots/upload-pdf",
         "sendBody": true,
         "contentType": "multipart-form-data",
         "bodyParameters": {

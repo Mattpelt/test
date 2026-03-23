@@ -1,13 +1,17 @@
 import logging
+import os
+import tempfile
 import threading
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, File, Query, UploadFile
 from pydantic import BaseModel
 
-from app.database import SessionLocal
+from app.database import SessionLocal, get_db
 from app.models.user import User
 from app.services.video_ingestor import ingest_device, ingest_gopro_http, ingest_mtp_device
+from fastapi import Depends
+from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/internal", tags=["Interne"])
 logger = logging.getLogger(__name__)
@@ -155,3 +159,35 @@ def onboarding_clear(serial: str | None = Query(default=None)):
         remove_pending_camera(serial)
     else:
         clear_pending_cameras()
+
+
+@router.post("/rots/upload-pdf", status_code=201)
+def internal_upload_pdf(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """
+    Endpoint interne pour l'ingestion de PDFs Afifly depuis n8n (sans authentification).
+    Accessible uniquement depuis le réseau Docker interne.
+    """
+    from app.services.pdf_parser import parse_afifly_pdf
+    from app.services.rot_service import upsert_rot
+
+    if not file.filename.lower().endswith(".pdf"):
+        return {"status": "error", "detail": "Fichier non PDF ignoré.", "file": file.filename}
+
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        tmp.write(file.file.read())
+        tmp_path = tmp.name
+
+    try:
+        data = parse_afifly_pdf(tmp_path)
+    except Exception as e:
+        os.unlink(tmp_path)
+        logger.warning(f"[PDF] Erreur parsing {file.filename}: {e}")
+        return {"status": "error", "detail": str(e), "file": file.filename}
+
+    try:
+        rot = upsert_rot(data, db, source_pdf_path=tmp_path)
+        logger.info(f"[PDF] Importé : rot n°{rot.rot_number} ({file.filename})")
+        return {"status": "ok", "rot_id": rot.id, "rot_number": rot.rot_number, "file": file.filename}
+    except Exception as e:
+        logger.warning(f"[PDF] Erreur persistance {file.filename}: {e}")
+        return {"status": "error", "detail": str(e), "file": file.filename}
