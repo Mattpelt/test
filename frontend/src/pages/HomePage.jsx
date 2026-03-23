@@ -3,10 +3,15 @@ import { useAuth } from '../context/AuthContext'
 import { api } from '../api/client'
 import styles from './HomePage.module.css'
 import GestionTab from '../components/GestionTab'
+import ProfileTab from '../components/ProfileTab'
 
 export default function HomePage() {
   const { user, logout } = useAuth()
-  const tabs = user.is_admin ? ['Mes vidéos', 'Gestion', 'Paramètres'] : ['Mes vidéos']
+  const tabs = [
+    'Mes vidéos',
+    'Mon compte',
+    ...(user.is_admin ? ['Gestion', 'Paramètres'] : []),
+  ]
   const [tab, setTab] = useState('Mes vidéos')
 
   return (
@@ -19,22 +24,21 @@ export default function HomePage() {
         </div>
       </header>
 
-      {user.is_admin && (
-        <div className={styles.tabs}>
-          {tabs.map(t => (
-            <button
-              key={t}
-              className={`${styles.tab} ${tab === t ? styles.tabActive : ''}`}
-              onClick={() => setTab(t)}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-      )}
+      <div className={styles.tabs}>
+        {tabs.map(t => (
+          <button
+            key={t}
+            className={`${styles.tab} ${tab === t ? styles.tabActive : ''}`}
+            onClick={() => setTab(t)}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
 
       <main className={styles.main}>
         {tab === 'Mes vidéos'  && <MyVideosTab />}
+        {tab === 'Mon compte'  && <ProfileTab />}
         {tab === 'Gestion'     && <GestionTab />}
         {tab === 'Paramètres'  && <SettingsTab />}
       </main>

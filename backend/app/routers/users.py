@@ -9,7 +9,8 @@ from app.database import get_db
 from app.models.rot_participant import RotParticipant
 from app.models.user import User
 from app.models.video import Video
-from app.schemas.user import OnboardingRequest, UserCreate, UserResponse, UserUpdate, UserUpdateCameras
+from app.auth import get_current_user
+from app.schemas.user import OnboardingRequest, UserCreate, UserResponse, UserSelfUpdate, UserUpdate, UserUpdateCameras
 
 router = APIRouter(prefix="/users", tags=["Utilisateurs"])
 logger = logging.getLogger(__name__)
@@ -137,6 +138,95 @@ def onboard(payload: OnboardingRequest, db: Session = Depends(get_db)):
             "created_at": user.created_at.isoformat(),
         }
     }
+
+
+@router.get("/me", response_model=UserResponse)
+def get_me(current_user: User = Depends(get_current_user)):
+    """Retourne le profil de l'utilisateur connecté."""
+    return current_user
+
+
+@router.patch("/me", response_model=UserResponse)
+def update_me(payload: UserSelfUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Met à jour le profil de l'utilisateur connecté (nom, email, afifly, PIN)."""
+    if payload.first_name is not None:
+        current_user.first_name = payload.first_name
+    if payload.last_name is not None:
+        current_user.last_name = payload.last_name
+    if payload.email is not None:
+        if payload.email and db.query(User).filter(User.email == payload.email, User.id != current_user.id).first():
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email déjà utilisé.")
+        current_user.email = payload.email or None
+    if payload.afifly_name is not None:
+        current_user.afifly_name = payload.afifly_name or None
+    if payload.pin is not None:
+        _validate_pin(payload.pin, current_user.is_admin)
+        lookup = pin_to_lookup_hash(payload.pin)
+        _pin_unique(lookup, db, exclude_id=current_user.id)
+        current_user.pin_lookup_hash = lookup
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
+@router.delete("/me/cameras/{serial}", response_model=UserResponse)
+def remove_my_camera(serial: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Supprime une caméra de la liste de l'utilisateur connecté."""
+    current_user.camera_serials = [s for s in current_user.camera_serials if s != serial]
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
+@router.post("/me/cameras/claim", response_model=UserResponse)
+def claim_camera(body: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """
+    Associe une caméra au compte de l'utilisateur connecté.
+    Si la caméra est dans la liste pending, démarre l'ingestion et la retire du pending.
+    Accepte {serial} ou {serial, manual: true} pour une saisie manuelle.
+    """
+    import threading
+    from app.routers.internal import get_pending_cameras, remove_pending_camera
+    from app.services.video_ingestor import ingest_device, ingest_gopro_http, ingest_mtp_device
+
+    serial = body.get("serial", "").strip()
+    if not serial:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Serial requis.")
+    if serial in current_user.camera_serials:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Cette caméra est déjà associée à votre compte.")
+    if db.query(User).filter(User.camera_serials.contains([serial]), User.is_active == True).first():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Cette caméra est déjà associée à un autre compte.")
+
+    current_user.camera_serials = current_user.camera_serials + [serial]
+    db.commit()
+    db.refresh(current_user)
+
+    # Démarrer l'ingestion si la caméra est dans le pending
+    pending_map = {c["serial"]: c for c in get_pending_cameras()}
+    cam = pending_map.get(serial)
+    if cam:
+        mtp, vendor_id, device_node = cam.get("mtp", False), cam.get("vendor_id"), cam.get("device_node")
+
+        def _run():
+            from app.database import SessionLocal
+            idb = SessionLocal()
+            try:
+                if mtp and vendor_id == "2672":
+                    ingest_gopro_http(serial=serial, db=idb)
+                elif mtp:
+                    ingest_mtp_device(serial=serial, db=idb)
+                elif device_node:
+                    ingest_device(device_node=device_node, serial=serial, db=idb)
+            finally:
+                idb.close()
+
+        threading.Thread(target=_run, daemon=True).start()
+        remove_pending_camera(serial)
+        logger.info(f"[USERS/ME] Caméra associée + ingestion démarrée : {serial} → user {current_user.id}")
+    else:
+        logger.info(f"[USERS/ME] Caméra associée (manuelle) : {serial} → user {current_user.id}")
+
+    return current_user
 
 
 @router.get("", response_model=list[UserResponse])

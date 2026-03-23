@@ -22,6 +22,15 @@ class OnboardingRequest(BaseModel):
     camera_serials:  list[str] = []         # serials sélectionnés par l'utilisateur
 
 
+class UserSelfUpdate(BaseModel):
+    """Mise à jour du profil par l'utilisateur lui-même."""
+    first_name:  str | None = None
+    last_name:   str | None = None
+    email:       str | None = None
+    afifly_name: str | None = None
+    pin:         str | None = None   # nouveau PIN (optionnel)
+
+
 class UserUpdate(BaseModel):
     """Mise à jour partielle d'un utilisateur (admin uniquement)."""
     first_name:     str | None = None
