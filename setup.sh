@@ -258,9 +258,10 @@ sudo tee /etc/udev/rules.d/99-skydive-camera.rules > /dev/null <<'UDEV_RULE'
 ACTION=="bind",   SUBSYSTEM=="usb",   ENV{DEVTYPE}=="usb_device", ENV{ID_GPHOTO2}=="1",      RUN+="/usr/local/bin/skydive-camera.sh"
 # Connexion — caméras USB Mass Storage (Insta360, etc.)
 ACTION=="add",    SUBSYSTEM=="block", ENV{ID_BUS}=="usb",         ENV{DEVTYPE}=="partition", RUN+="/usr/local/bin/skydive-storage.sh"
-# Débranchement — toute caméra USB avec serial (MTP ou Mass Storage)
-# On écoute au niveau usb_device pour que ID_SERIAL_SHORT soit toujours disponible
-ACTION=="remove", SUBSYSTEM=="usb",   ENV{DEVTYPE}=="usb_device", ENV{ID_SERIAL_SHORT}!="",  RUN+="/usr/local/bin/skydive-disconnect.sh"
+# Débranchement — GoPro HERO (USB NCM : l'interface réseau porte le serial)
+ACTION=="remove", SUBSYSTEM=="net",   ENV{ID_BUS}=="usb",         ENV{ID_VENDOR_ID}=="2672", RUN+="/usr/local/bin/skydive-disconnect.sh"
+# Débranchement — Insta360 Mass Storage (partition block USB)
+ACTION=="remove", SUBSYSTEM=="block", ENV{ID_BUS}=="usb",         ENV{DEVTYPE}=="partition", RUN+="/usr/local/bin/skydive-disconnect.sh"
 UDEV_RULE
 
 sudo udevadm control --reload-rules
