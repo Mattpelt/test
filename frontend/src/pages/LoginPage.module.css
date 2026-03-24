@@ -82,3 +82,14 @@
 .submitBtn:hover:not(:disabled) { background: var(--color-accent-dark); }
 .submitBtn:disabled { opacity: 0.6; cursor: not-allowed; }
 .submitBtn:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+
+.kioskLink {
+  display: block;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--color-muted);
+  text-decoration: none;
+  padding-top: 0.25rem;
+  transition: color 0.15s;
+}
+.kioskLink:hover { color: var(--color-text); }

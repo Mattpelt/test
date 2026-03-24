@@ -18,11 +18,15 @@ from app.models.user import User
 from app.models.video import Video
 from app.services.matcher import match_videos_to_rots
 from app.services.notifier import notify_videos_ready
+from app import camera_state
 
 logger = logging.getLogger(__name__)
 
 # Extensions vidéo reconnues (insensible à la casse)
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".insv", ".avi", ".mts", ".lrv", ".360"}
+
+# Taille de bloc pour la copie avec progression (4 Mo)
+_COPY_CHUNK = 4 * 1024 * 1024
 
 
 # ---------------------------------------------------------------------------
@@ -160,6 +164,17 @@ def _save_video_record(
     ))
 
 
+def _copy_with_progress(src: Path, dest: Path, serial: str) -> None:
+    """Copie src → dest par blocs de 4 Mo en mettant à jour camera_state."""
+    with open(src, "rb") as fin, open(dest, "wb") as fout:
+        while True:
+            chunk = fin.read(_COPY_CHUNK)
+            if not chunk:
+                break
+            fout.write(chunk)
+            camera_state.add_bytes(serial, len(chunk))
+
+
 # ---------------------------------------------------------------------------
 # Path 1 : block device (SD card / mass storage)
 # ---------------------------------------------------------------------------
@@ -218,6 +233,10 @@ def ingest_device(device_node: str, serial: str, db: Session) -> None:
       - un block device (/dev/sdb1)        : monté par nos soins dans le container
     Ordre : montage → extraction serial réel → lookup utilisateur → copie.
     """
+    # serial USB brut (clé de la session kiosque enregistrée dans usb_watcher)
+    usb_serial = serial
+
+    camera_state.update(usb_serial, status="DETECTING")
     retention_days, storage_path = _get_settings(db)
 
     # Montage
@@ -237,12 +256,12 @@ def ingest_device(device_node: str, serial: str, db: Session) -> None:
         except subprocess.CalledProcessError as e:
             logger.error(f"Impossible de monter {device_node} : {e}")
             os.rmdir(mount_point)
+            camera_state.update(usb_serial, status="ERROR", error_msg=str(e),
+                                 finished_at=time.time())
             return
 
     try:
         # Extraction du serial réel + make/model depuis les métadonnées .insv (Insta360)
-        # Doit précéder le lookup utilisateur car le serial USB peut être générique ("0001")
-        usb_serial = serial
         insv_serial, insv_make, insv_model = _extract_insv_camera_info(mount_point)
         if insv_serial:
             logger.info(f"[INGEST][Block] Serial corrigé depuis métadonnées .insv : {insv_serial} (USB brut : {usb_serial})")
@@ -250,16 +269,23 @@ def ingest_device(device_node: str, serial: str, db: Session) -> None:
 
         user = _find_user(serial, db, usb_serial=usb_serial)
         if not user:
+            camera_state.update(usb_serial, status="UNKNOWN", finished_at=time.time())
             return
+
+        camera_state.update(usb_serial, owner_name=f"{user.first_name} {user.last_name}")
 
         # Enregistrer / mettre à jour les métadonnées de la caméra
         make = insv_make
         model = insv_model
         _upsert_camera(db, serial, make=make, model=model, usb_serial=usb_serial)
+        if make or model:
+            camera_state.update(usb_serial, make=make or "", model=model or "")
 
         logger.info(f"[INGEST][Block] ━━━ Début ingestion — {user.first_name} {user.last_name} | serial: {serial} ━━━")
         video_files = _find_videos(mount_point)
         logger.info(f"[INGEST][Block] {len(video_files)} vidéo(s) trouvée(s) sur le périphérique")
+
+        camera_state.update(usb_serial, video_total=len(video_files))
 
         # Matching avant téléchargement : [(filename, cre_ts), ...]
         video_list = [
@@ -267,6 +293,10 @@ def ingest_device(device_node: str, serial: str, db: Session) -> None:
             for v in video_files
         ]
         matches = match_videos_to_rots(video_list, user.id, db)
+
+        # Labels des rotations matchées pour le kiosque
+        preview_rot_ids = sorted({m[0] for m in matches.values()})
+        camera_state.update(usb_serial, rot_labels=[f"Rot #{r}" for r in preview_rot_ids])
 
         total = len(video_files)
         ingested = skipped = unmatched = 0
@@ -290,9 +320,15 @@ def ingest_device(device_node: str, serial: str, db: Session) -> None:
                 logger.info(f"[INGEST][Block] [{i}/{total}] Ignoré — déjà présent : {video_file.name}")
                 continue
 
-            size_mb = video_file.stat().st_size / 1_048_576
+            size = video_file.stat().st_size
+            size_mb = size / 1_048_576
             logger.info(f"[INGEST][Block] [{i}/{total}] Copie : {video_file.name} ({size_mb:.0f} Mo) → rot #{rot_id}")
-            shutil.copy2(video_file, dest_path)
+
+            camera_state.update(usb_serial, status="COPYING", video_index=i,
+                                 bytes_done=0, bytes_total=size, speed_bps=0)
+
+            _copy_with_progress(video_file, dest_path, usb_serial)
+
             camera_ts = datetime.fromtimestamp(os.path.getmtime(video_file))
             _save_video_record(db, video_file.name, str(dest_path),
                                video_file.stat().st_size, camera_ts,
@@ -302,6 +338,7 @@ def ingest_device(device_node: str, serial: str, db: Session) -> None:
             logger.info(f"[INGEST][Block] [{i}/{total}] ✔ Copiée avec succès")
 
         db.commit()
+        camera_state.update(usb_serial, status="DONE", finished_at=time.time())
         logger.info(
             f"[INGEST][Block] ━━━ Fin ingestion — {user.first_name} {user.last_name} : "
             f"{ingested} copiée(s), {skipped} déjà présente(s), {unmatched} sans rot ━━━"
@@ -311,6 +348,8 @@ def ingest_device(device_node: str, serial: str, db: Session) -> None:
 
     except Exception as e:
         db.rollback()
+        camera_state.update(usb_serial, status="ERROR", error_msg=str(e),
+                             finished_at=time.time())
         logger.error(f"Erreur ingestion block : {e}")
     finally:
         if own_mount:
@@ -334,9 +373,14 @@ def ingest_gopro_http(serial: str, db: Session) -> None:
     Ingestion GoPro via Open GoPro HTTP API (interface USB NCM).
     Télécharge tous les fichiers vidéo présents sur la caméra.
     """
+    camera_state.update(serial, status="DETECTING")
+
     user = _find_user(serial, db)
     if not user:
+        camera_state.update(serial, status="UNKNOWN", finished_at=time.time())
         return
+
+    camera_state.update(serial, owner_name=f"{user.first_name} {user.last_name}")
 
     logger.info(f"[INGEST][GoPro] ━━━ Début ingestion — {user.first_name} {user.last_name} | serial: {serial} ━━━")
     retention_days, storage_path = _get_settings(db)
@@ -365,10 +409,12 @@ def ingest_gopro_http(serial: str, db: Session) -> None:
             if not make:
                 make = "GoPro"
             _upsert_camera(db, serial, make=make, model=model, vendor_id="2672")
+            camera_state.update(serial, make=make, model=model or "")
             logger.info(f"[INGEST][GoPro] Caméra : {make} {model or ''} | serial: {serial}")
     except requests.RequestException as e:
         logger.warning(f"[INGEST][GoPro] Impossible de récupérer le modèle caméra : {e}")
         _upsert_camera(db, serial, make="GoPro", vendor_id="2672")
+        camera_state.update(serial, make="GoPro")
 
     # La GoPro peut retourner une liste vide si le serveur média n'est pas encore prêt
     # → on retente jusqu'à 5 fois avec 5s d'intervalle
@@ -389,7 +435,11 @@ def ingest_gopro_http(serial: str, db: Session) -> None:
 
     if not media_data:
         logger.error("[INGEST][GoPro] Aucune réponse après 5 tentatives — ingestion abandonnée")
+        camera_state.update(serial, status="ERROR",
+                             error_msg="Aucune réponse GoPro après 5 tentatives",
+                             finished_at=time.time())
         return
+
     # Format: {"id": "...", "media": [{"d": "100GOPRO", "fs": [{"n": "GX010488.MP4", "s": "...", "cre": timestamp}]}]}
     all_files: list[tuple[str, str, int, int]] = []  # (dossier, nom, taille, cre)
     for entry in media_data.get("media", []):
@@ -403,13 +453,19 @@ def ingest_gopro_http(serial: str, db: Session) -> None:
 
     if not all_files:
         logger.info(f"[INGEST][GoPro] Aucune vidéo trouvée sur la carte SD")
+        camera_state.update(serial, status="DONE", finished_at=time.time())
         return
 
     logger.info(f"[INGEST][GoPro] {len(all_files)} vidéo(s) présente(s) sur la carte SD")
+    camera_state.update(serial, video_total=len(all_files))
 
     # Matching avant téléchargement
     video_list = [(name, cre) for _, name, _, cre in all_files]
     matches = match_videos_to_rots(video_list, user.id, db)
+
+    # Labels des rotations matchées pour le kiosque
+    preview_rot_ids = sorted({m[0] for m in matches.values()})
+    camera_state.update(serial, rot_labels=[f"Rot #{r}" for r in preview_rot_ids])
 
     # Index par nom pour accès rapide aux métadonnées
     file_meta = {name: (folder, size, cre) for folder, name, size, cre in all_files}
@@ -441,12 +497,16 @@ def ingest_gopro_http(serial: str, db: Session) -> None:
         size_mb = size / 1_048_576
         logger.info(f"[INGEST][GoPro] [{i}/{total}] Téléchargement : {name} ({size_mb:.0f} Mo) → rot #{rot_id}")
 
+        camera_state.update(serial, status="DOWNLOADING", video_index=i,
+                             bytes_done=0, bytes_total=size, speed_bps=0)
+
         try:
             with requests.get(url, stream=True, timeout=300) as dl:
                 dl.raise_for_status()
                 with open(dest_path, "wb") as out:
                     for chunk in dl.iter_content(chunk_size=1 * 1024 * 1024):
                         out.write(chunk)
+                        camera_state.add_bytes(serial, len(chunk))
         except requests.RequestException as e:
             logger.error(f"[INGEST][GoPro] [{i}/{total}] Échec téléchargement {name} : {e}")
             dest_path.unlink(missing_ok=True)
@@ -461,6 +521,7 @@ def ingest_gopro_http(serial: str, db: Session) -> None:
         logger.info(f"[INGEST][GoPro] [{i}/{total}] ✔ Téléchargée avec succès")
 
     db.commit()
+    camera_state.update(serial, status="DONE", finished_at=time.time())
     logger.info(
         f"[INGEST][GoPro] ━━━ Fin ingestion — {user.first_name} {user.last_name} : "
         f"{ingested} téléchargée(s), {skipped} déjà présente(s), {unmatched} sans rot ━━━"
@@ -493,9 +554,14 @@ def ingest_mtp_device(serial: str, db: Session) -> None:
     Ingestion via MTP/PTP (gphoto2).
     Compatible avec GoPro, Insta360, Sony et la plupart des caméras modernes.
     """
+    camera_state.update(serial, status="DETECTING")
+
     user = _find_user(serial, db)
     if not user:
+        camera_state.update(serial, status="UNKNOWN", finished_at=time.time())
         return
+
+    camera_state.update(serial, owner_name=f"{user.first_name} {user.last_name}")
 
     retention_days, storage_path = _get_settings(db)
 
@@ -507,6 +573,8 @@ def ingest_mtp_device(serial: str, db: Session) -> None:
         camera.init()
     except gp.GPhoto2Error as e:
         logger.error(f"Impossible d'initialiser la caméra MTP ({serial}) : {e}")
+        camera_state.update(serial, status="ERROR", error_msg=str(e),
+                             finished_at=time.time())
         return
 
     try:
@@ -515,6 +583,7 @@ def ingest_mtp_device(serial: str, db: Session) -> None:
             abilities = camera.get_abilities()
             make, model = _parse_model_string(abilities.model)
             _upsert_camera(db, serial, make=make, model=model)
+            camera_state.update(serial, make=make or "", model=model or "")
             logger.info(f"[INGEST][MTP] Caméra : {make or ''} {model or ''} | serial: {serial}")
         except Exception as e:
             logger.warning(f"[INGEST][MTP] Impossible de lire les abilities caméra : {e}")
@@ -523,18 +592,27 @@ def ingest_mtp_device(serial: str, db: Session) -> None:
         video_files = _list_mtp_videos(camera)
         logger.info(f"[INGEST][MTP] {len(video_files)} vidéo(s) trouvée(s) sur la caméra")
 
-        # Récupérer les horodatages pour le matching (sans télécharger)
+        camera_state.update(serial, video_total=len(video_files))
+
+        # Récupérer les horodatages et tailles pour le matching (sans télécharger)
         timestamps: dict[str, int] = {}
+        file_sizes: dict[str, int] = {}
         for folder, name in video_files:
             try:
                 info = camera.file_get_info(folder, name)
                 timestamps[name] = int(info.file.mtime)
+                file_sizes[name] = int(info.file.size)
             except gp.GPhoto2Error:
                 timestamps[name] = int(datetime.utcnow().timestamp())
+                file_sizes[name] = 0
 
         # Matching avant téléchargement
         video_list = [(name, timestamps[name]) for _, name in video_files]
         matches = match_videos_to_rots(video_list, user.id, db)
+
+        # Labels des rotations matchées pour le kiosque
+        preview_rot_ids = sorted({m[0] for m in matches.values()})
+        camera_state.update(serial, rot_labels=[f"Rot #{r}" for r in preview_rot_ids])
 
         ingested = skipped = unmatched = 0
         total = len(video_files)
@@ -558,19 +636,27 @@ def ingest_mtp_device(serial: str, db: Session) -> None:
                 logger.info(f"[INGEST][MTP] [{i}/{total}] Ignoré — déjà présent : {name}")
                 continue
 
+            file_size = file_sizes.get(name, 0)
+            camera_state.update(serial, status="COPYING", video_index=i,
+                                 bytes_done=0, bytes_total=file_size, speed_bps=0)
+
             camera_ts = datetime.fromtimestamp(timestamps[name])
             logger.info(f"[INGEST][MTP] [{i}/{total}] Téléchargement : {name} → rot #{rot_id}")
             camera_file = camera.file_get(folder, name, gp.GP_FILE_TYPE_NORMAL)
             camera_file.save(str(dest_path))
 
-            file_size = dest_path.stat().st_size
-            _save_video_record(db, name, str(dest_path), file_size,
+            actual_size = dest_path.stat().st_size
+            # Signaler les bytes d'un coup (gphoto2 ne donne pas de chunks)
+            camera_state.add_bytes(serial, actual_size)
+
+            _save_video_record(db, name, str(dest_path), actual_size,
                                camera_ts, user.id, retention_days, rot_id, group_id)
             matched_rot_ids.append(rot_id)
             ingested += 1
             logger.info(f"[INGEST][MTP] [{i}/{total}] ✔ Téléchargée avec succès")
 
         db.commit()
+        camera_state.update(serial, status="DONE", finished_at=time.time())
         logger.info(
             f"[INGEST][MTP] ━━━ Fin ingestion — {user.first_name} {user.last_name} : "
             f"{ingested} téléchargée(s), {skipped} déjà présente(s), {unmatched} sans rot ━━━"
@@ -580,6 +666,8 @@ def ingest_mtp_device(serial: str, db: Session) -> None:
 
     except Exception as e:
         db.rollback()
+        camera_state.update(serial, status="ERROR", error_msg=str(e),
+                             finished_at=time.time())
         logger.error(f"Erreur ingestion MTP : {e}")
     finally:
         camera.exit()

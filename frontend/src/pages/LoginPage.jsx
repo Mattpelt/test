@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import styles from './LoginPage.module.css'
 
@@ -63,6 +63,10 @@ export default function LoginPage() {
             {loading ? 'Connexion…' : 'Se connecter'}
           </button>
         </form>
+
+        <Link to="/kiosk" className={styles.kioskLink}>
+          Mode kiosque →
+        </Link>
       </div>
     </div>
   )

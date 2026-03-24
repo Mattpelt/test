@@ -17,7 +17,7 @@ from app import models  # noqa: F401 — enregistre les modèles auprès de SQLA
 from app.models.settings import Settings
 from app.services.usb_watcher import start_usb_watcher
 from app.services.retention import cleanup_expired_videos
-from app.routers import auth, users, rots, videos, internal, settings, admin_stats
+from app.routers import auth, users, rots, videos, internal, settings, admin_stats, cameras
 from app import log_buffer
 
 logging.basicConfig(
@@ -36,6 +36,7 @@ app.include_router(videos.router)
 app.include_router(internal.router)
 app.include_router(settings.router)
 app.include_router(admin_stats.router)
+app.include_router(cameras.router)
 
 
 @app.on_event("startup")

@@ -2,6 +2,7 @@ import logging
 import pyudev
 from app.database import SessionLocal
 from app.services.video_ingestor import ingest_device, ingest_mtp_device
+from app import camera_state
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ def _handle_block_event(action: str, device: pyudev.Device) -> None:
         return
 
     logger.info(f"Block device détecté — nœud: {device_node}, série: {serial}")
+    camera_state.register(serial)   # card kiosque immédiate
     _run_ingest(lambda db: ingest_device(device_node=device_node, serial=serial, db=db))
 
 
@@ -56,6 +58,7 @@ def _handle_usb_camera_event(action: str, device: pyudev.Device) -> None:
         return
 
     logger.info(f"Caméra MTP/PTP détectée — série: {serial}")
+    camera_state.register(serial)   # card kiosque immédiate
     _run_ingest(lambda db: ingest_mtp_device(serial=serial, db=db))
 
 
