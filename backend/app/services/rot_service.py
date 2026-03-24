@@ -94,6 +94,38 @@ def upsert_rot(data: dict, db: Session, source_pdf_path: str | None = None) -> R
     return existing
 
 
+def rematch_user_participants(user: User, db: Session) -> int:
+    """
+    Associe rétroactivement les RotParticipant dont l'afifly_name correspond
+    à cet utilisateur et dont le user_id est encore NULL.
+    Retourne le nombre de lignes mises à jour.
+    """
+    if not user.afifly_name:
+        return 0
+    updated = (
+        db.query(RotParticipant)
+        .filter(RotParticipant.afifly_name == user.afifly_name, RotParticipant.user_id == None)
+        .update({"user_id": user.id})
+    )
+    if updated:
+        db.commit()
+        logger.info(f"[ROT] Rematch — {updated} participant(s) liés à {user.afifly_name} (user id={user.id})")
+    return updated
+
+
+def rematch_all_participants(db: Session) -> int:
+    """
+    Pour chaque utilisateur actif avec un afifly_name, lie les RotParticipant non matchés.
+    Retourne le nombre total de lignes mises à jour.
+    """
+    users = db.query(User).filter(User.afifly_name != None, User.is_active == True).all()
+    total = 0
+    for user in users:
+        total += rematch_user_participants(user, db)
+    logger.info(f"[ROT] Rematch global — {total} participant(s) liés au total")
+    return total
+
+
 def _add_participants(rot_id: int, participants: list, db: Session) -> int:
     """Crée les lignes RotParticipant et retourne le nombre de matchés."""
     matched = 0

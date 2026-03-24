@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.auth import create_access_token, hash_password, pin_to_lookup_hash, require_admin
+from app.services.rot_service import rematch_all_participants, rematch_user_participants
 from app.database import get_db
 from app.models.camera import Camera
 from app.models.rot_participant import RotParticipant
@@ -38,6 +39,7 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db), _: User = De
     db.add(user)
     db.commit()
     db.refresh(user)
+    rematch_user_participants(user, db)
     logger.info(f"[USERS] Compte créé par admin : {user.first_name} {user.last_name} (id={user.id})")
     return user
 
@@ -157,6 +159,7 @@ def update_me(payload: UserSelfUpdate, db: Session = Depends(get_db), current_us
         if payload.email and db.query(User).filter(User.email == payload.email, User.id != current_user.id).first():
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email déjà utilisé.")
         current_user.email = payload.email or None
+    afifly_changed = payload.afifly_name is not None and payload.afifly_name != current_user.afifly_name
     if payload.afifly_name is not None:
         current_user.afifly_name = payload.afifly_name or None
     if payload.password is not None:
@@ -167,6 +170,8 @@ def update_me(payload: UserSelfUpdate, db: Session = Depends(get_db), current_us
         current_user.notifications_enabled = payload.notifications_enabled
     db.commit()
     db.refresh(current_user)
+    if afifly_changed:
+        rematch_user_participants(current_user, db)
     return current_user
 
 
@@ -253,6 +258,13 @@ def claim_camera(body: dict, db: Session = Depends(get_db), current_user: User =
     return current_user
 
 
+@router.post("/rematch-participants", status_code=status.HTTP_200_OK)
+def rematch_participants(db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    """Associe rétroactivement tous les participants non matchés aux comptes existants."""
+    total = rematch_all_participants(db)
+    return {"matched": total}
+
+
 @router.get("", response_model=list[UserResponse])
 def list_users(db: Session = Depends(get_db), _: User = Depends(require_admin)):
     """Retourne la liste de tous les sautants actifs."""
@@ -282,6 +294,7 @@ def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(get_db)
         if payload.email and db.query(User).filter(User.email == payload.email, User.id != user_id).first():
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email déjà utilisé.")
         user.email = payload.email or None
+    afifly_changed = payload.afifly_name is not None and payload.afifly_name != user.afifly_name
     if payload.afifly_name is not None:
         user.afifly_name = payload.afifly_name or None
     if payload.camera_serials is not None:
@@ -298,6 +311,8 @@ def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(get_db)
         user.notifications_enabled = payload.notifications_enabled
     db.commit()
     db.refresh(user)
+    if afifly_changed:
+        rematch_user_participants(user, db)
     logger.info(f"[USERS] Compte mis à jour par admin : id={user_id}")
     return user
 

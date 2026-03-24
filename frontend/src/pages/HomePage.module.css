@@ -266,6 +266,17 @@
   justify-content: space-between;
 }
 
+.tabBarActions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.rematchInfo {
+  color: var(--color-success);
+  font-size: 0.8rem;
+}
+
 .tabTitle {
   font-size: 1.1rem;
   font-weight: 700;

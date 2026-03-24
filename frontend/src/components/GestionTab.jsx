@@ -37,7 +37,9 @@ function UsersSubTab() {
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
   const [editUser, setEditUser] = useState(null)
-  const [confirmDialog, setConfirmDialog] = useState(null) // { title, message, onConfirm }
+  const [confirmDialog, setConfirmDialog] = useState(null)
+  const [rematching, setRematching] = useState(false)
+  const [rematchResult, setRematchResult] = useState(null)
 
   async function load() {
     setLoading(true)
@@ -69,6 +71,18 @@ function UsersSubTab() {
     load()
   }
 
+  async function rematchAll() {
+    setRematching(true)
+    setRematchResult(null)
+    try {
+      const { data } = await api.post('/users/rematch-participants')
+      setRematchResult(data.matched)
+      setTimeout(() => setRematchResult(null), 5000)
+    } finally {
+      setRematching(false)
+    }
+  }
+
   function hardDelete(id, name) {
     setConfirmDialog({
       title: 'Suppression définitive',
@@ -96,7 +110,17 @@ function UsersSubTab() {
 
       <div className={styles.tabBar}>
         <h2 className={styles.tabTitle}>Utilisateurs ({users.length})</h2>
-        <button className={styles.primaryBtn} onClick={() => setShowCreate(true)}>+ Nouveau</button>
+        <div className={styles.tabBarActions}>
+          {rematchResult !== null && (
+            <span className={styles.rematchInfo}>
+              {rematchResult} participation(s) liée(s)
+            </span>
+          )}
+          <button className={styles.secondaryBtn} onClick={rematchAll} disabled={rematching}>
+            {rematching ? 'Matching…' : '↻ Rematch rotations'}
+          </button>
+          <button className={styles.primaryBtn} onClick={() => setShowCreate(true)}>+ Nouveau</button>
+        </div>
       </div>
 
       {showCreate && (
