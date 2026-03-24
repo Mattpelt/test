@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, Fragment } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api/client'
 import styles from './HomePage.module.css'
-import GestionTab from '../components/GestionTab'
+import { UsersSubTab, RotsSubTab, VideosSubTab, MonitoringSubTab } from '../components/GestionTab'
 import ProfileTab from '../components/ProfileTab'
 
 export default function HomePage() {
@@ -11,7 +11,7 @@ export default function HomePage() {
   const tabs = [
     'Mes vidéos',
     'Mon compte',
-    ...(user.is_admin ? ['Gestion', 'Paramètres'] : []),
+    ...(user.is_admin ? ['Dashboard', 'Paramètres serveur', 'Utilisateurs', 'Rotations', 'Vidéos'] : []),
   ]
   const [tab, setTab] = useState('Mes vidéos')
   const [layoutMode, setLayoutMode] = useState(() => {
@@ -104,10 +104,13 @@ export default function HomePage() {
       )}
 
       <main className={styles.main}>
-        {tab === 'Mes vidéos'  && <MyVideosTab onPreview={setPreviewVideo} layoutMode={layoutMode} />}
-        {tab === 'Mon compte'  && <ProfileTab />}
-        {tab === 'Gestion'     && <GestionTab />}
-        {tab === 'Paramètres'  && <SettingsTab />}
+        {tab === 'Mes vidéos'        && <MyVideosTab onPreview={setPreviewVideo} layoutMode={layoutMode} />}
+        {tab === 'Mon compte'        && <ProfileTab />}
+        {tab === 'Dashboard'         && <MonitoringSubTab />}
+        {tab === 'Paramètres serveur' && <SettingsTab />}
+        {tab === 'Utilisateurs'      && <UsersSubTab />}
+        {tab === 'Rotations'         && <RotsSubTab />}
+        {tab === 'Vidéos'            && <VideosSubTab />}
       </main>
     </div>
   )

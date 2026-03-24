@@ -33,7 +33,7 @@ export default function GestionTab() {
 /* ─────────────────────────────────────────────────
    Sous-onglet Utilisateurs
 ───────────────────────────────────────────────── */
-function UsersSubTab() {
+export function UsersSubTab() {
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
@@ -299,7 +299,7 @@ function UserForm({ user, onSuccess, onCancel }) {
 /* ─────────────────────────────────────────────────
    Sous-onglet Rotations
 ───────────────────────────────────────────────── */
-function RotsSubTab() {
+export function RotsSubTab() {
   const [rots, setRots] = useState([])
   const [loading, setLoading] = useState(true)
   const [editRot, setEditRot] = useState(null)
@@ -778,7 +778,7 @@ function RotForm({ rot, onSuccess, onCancel }) {
 /* ─────────────────────────────────────────────────
    Sous-onglet Vidéos
 ───────────────────────────────────────────────── */
-function VideosSubTab() {
+export function VideosSubTab() {
   const [videos, setVideos] = useState([])
   const [users, setUsers] = useState([])
   const [rots, setRots] = useState([])
@@ -922,7 +922,7 @@ function VideosSubTab() {
 /* ─────────────────────────────────────────────────
    Sous-onglet Monitoring
 ───────────────────────────────────────────────── */
-function MonitoringSubTab() {
+export function MonitoringSubTab() {
   const [stats,   setStats]   = useState(null)
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState('')
