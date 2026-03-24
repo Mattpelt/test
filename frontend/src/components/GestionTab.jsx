@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import styles from '../pages/HomePage.module.css'
 import ConfirmModal from './ConfirmModal'
