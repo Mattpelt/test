@@ -241,15 +241,29 @@ fi
 UDEV_SCRIPT
 sudo chmod +x /usr/local/bin/skydive-storage-worker.sh
 
+# Script de débranchement caméra (commun MTP + Mass Storage)
+sudo tee /usr/local/bin/skydive-disconnect.sh > /dev/null <<'UDEV_SCRIPT'
+#!/bin/bash
+LOG=/tmp/skydive-camera.log
+echo "[$(date)] udev disconnect: serial=$ID_SERIAL_SHORT" >> "$LOG"
+/usr/bin/systemd-run --no-block \
+  /usr/bin/curl -s -X POST http://127.0.0.1:8000/internal/camera-disconnected \
+  -H "Content-Type: application/json" \
+  -d "{\"serial\": \"$ID_SERIAL_SHORT\"}" >> "$LOG" 2>&1
+UDEV_SCRIPT
+sudo chmod +x /usr/local/bin/skydive-disconnect.sh
+
 sudo tee /etc/udev/rules.d/99-skydive-camera.rules > /dev/null <<'UDEV_RULE'
 # Caméras MTP/PTP (GoPro via gphoto2, Sony, etc.)
-ACTION=="bind", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ENV{ID_GPHOTO2}=="1", RUN+="/usr/local/bin/skydive-camera.sh"
+ACTION=="bind",   SUBSYSTEM=="usb",   ENV{DEVTYPE}=="usb_device", ENV{ID_GPHOTO2}=="1",       RUN+="/usr/local/bin/skydive-camera.sh"
+ACTION=="remove", SUBSYSTEM=="usb",   ENV{DEVTYPE}=="usb_device", ENV{ID_GPHOTO2}=="1",       RUN+="/usr/local/bin/skydive-disconnect.sh"
 # Caméras USB Mass Storage (Insta360, etc.)
-ACTION=="add", SUBSYSTEM=="block", ENV{ID_BUS}=="usb", ENV{DEVTYPE}=="partition", RUN+="/usr/local/bin/skydive-storage.sh"
+ACTION=="add",    SUBSYSTEM=="block", ENV{ID_BUS}=="usb",          ENV{DEVTYPE}=="partition",  RUN+="/usr/local/bin/skydive-storage.sh"
+ACTION=="remove", SUBSYSTEM=="block", ENV{ID_BUS}=="usb",          ENV{DEVTYPE}=="partition",  RUN+="/usr/local/bin/skydive-disconnect.sh"
 UDEV_RULE
 
 sudo udevadm control --reload-rules
-log "Règles udev configurées (MTP + USB Mass Storage)"
+log "Règles udev configurées (MTP + USB Mass Storage + disconnect)"
 
 # ==============================================================
 # ÉTAPE 8 — Démarrage Docker Compose

@@ -153,6 +153,18 @@ def camera_connected(event: CameraEvent):
     return {"status": "ingestion_started"}
 
 
+class CameraDisconnectEvent(BaseModel):
+    serial: str
+
+
+@router.post("/camera-disconnected")
+def camera_disconnected(event: CameraDisconnectEvent):
+    """Appelé par la règle udev ACTION=remove — déclenche la disparition de la card kiosque."""
+    logger.info(f"[USB] Caméra débranchée — serial: {event.serial}")
+    camera_state.disconnect(event.serial)
+    return {"ok": True}
+
+
 @router.get("/onboarding/pending")
 def onboarding_pending():
     """
