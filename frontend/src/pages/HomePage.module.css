@@ -764,8 +764,13 @@
   word-break: break-all;
 }
 
+.videoTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
 .downloadIconBtn {
-  align-self: flex-start;
   background: none;
   border: 1.5px solid var(--color-border);
   border-radius: 4px;
@@ -774,9 +779,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
-  margin-top: 0.15rem;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
   transition: border-color 0.15s, color 0.15s;
 }
 
