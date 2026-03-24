@@ -4,7 +4,7 @@ import os
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.auth import create_access_token, hash_password, pin_to_lookup_hash, require_admin
+from app.auth import create_access_token, hash_password, require_admin
 from app.services.rot_service import rematch_all_participants, rematch_user_participants
 from app.database import get_db
 from app.models.camera import Camera
@@ -44,48 +44,27 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db), _: User = De
     return user
 
 
-def _validate_pin(pin: str, is_admin: bool) -> None:
-    expected = 6 if is_admin else 4
-    if not pin.isdigit() or len(pin) != expected:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Le PIN doit contenir exactement {expected} chiffres.",
-        )
-
-
-def _pin_unique(pin_hash: str, db: Session, exclude_id: int | None = None) -> None:
-    q = db.query(User).filter(User.pin_lookup_hash == pin_hash)
-    if exclude_id:
-        q = q.filter(User.id != exclude_id)
-    if q.first():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Ce PIN est déjà utilisé par un autre compte.",
-        )
-
-
 @router.post("/onboard", response_model=dict, status_code=status.HTTP_201_CREATED)
 def onboard(payload: OnboardingRequest, db: Session = Depends(get_db)):
     """
     Crée un compte depuis le kiosque (self-service, sans authentification).
-    PIN : exactement 4 chiffres.
-    Les serials sélectionnés par l'utilisateur sont associés et l'ingestion démarre.
+    Les serials sélectionnés sont associés et l'ingestion démarre immédiatement.
     """
     import threading
     from app.routers.internal import get_pending_cameras, remove_pending_camera
     from app.services.video_ingestor import ingest_device, ingest_gopro_http, ingest_mtp_device
 
-    _validate_pin(payload.pin, is_admin=False)
-    if payload.email and db.query(User).filter(User.email == payload.email).first():
+    email = payload.email.lower().strip()
+    if db.query(User).filter(User.email == email).first():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email déjà utilisé.")
-    lookup = pin_to_lookup_hash(payload.pin)
-    _pin_unique(lookup, db)
+    if len(payload.password) < 8:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Le mot de passe doit contenir au moins 8 caractères.")
 
     user = User(
         first_name=payload.first_name,
         last_name=payload.last_name,
-        email=payload.email or None,
-        pin_lookup_hash=lookup,
+        email=email,
+        password_hash=hash_password(payload.password),
         afifly_name=payload.afifly_name or None,
         camera_serials=list(payload.camera_serials),
         is_admin=False,

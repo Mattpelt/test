@@ -13,12 +13,12 @@ class UserCreate(BaseModel):
 
 
 class OnboardingRequest(BaseModel):
-    """Réservé au pupitre — désactivé côté mobile."""
+    """Création de compte en self-service depuis le kiosque."""
     first_name:      str
     last_name:       str
-    email:           str | None = None
+    email:           str
+    password:        str
     afifly_name:     str | None = None
-    pin:             str
     camera_serials:  list[str] = []
 
 

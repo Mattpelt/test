@@ -13,18 +13,24 @@ export default function OnboardingPage() {
   // Étape 0 : choix du parcours
   const [mode, setMode] = useState(null) // null | 'new' | 'existing'
 
-  // ── Parcours "utilisateur existant" (PIN) ───────────────────────────────
-  const [pin, setPin]           = useState('')
-  const [pinError, setPinError] = useState('')
-  const [pinLoading, setPinLoading] = useState(false)
+  // ── Parcours "utilisateur existant" (email + mot de passe) ─────────────
+  const [loginForm, setLoginForm]   = useState({ email: '', password: '' })
+  const [loginError, setLoginError] = useState('')
+  const [loginLoading, setLoginLoading] = useState(false)
 
-  async function submitPin(e) {
+  function setLoginField(field) {
+    return e => setLoginForm(f => ({ ...f, [field]: e.target.value }))
+  }
+
+  async function submitLogin(e) {
     e.preventDefault()
-    setPinError('')
-    if (!/^\d{4}$/.test(pin)) { setPinError('PIN de 4 chiffres requis.'); return }
-    setPinLoading(true)
+    setLoginError('')
+    setLoginLoading(true)
     try {
-      const { data } = await api.post('/auth/pin-login', { pin })
+      const { data } = await api.post('/auth/login', {
+        email:    loginForm.email,
+        password: loginForm.password,
+      })
       const token = data.access_token
       if (serialParam) {
         await api.post(
@@ -36,9 +42,9 @@ export default function OnboardingPage() {
       await loginWithToken(token)
       navigate('/', { replace: true })
     } catch (err) {
-      setPinError(err.response?.data?.detail ?? 'PIN incorrect.')
+      setLoginError(err.response?.data?.detail ?? 'Email ou mot de passe incorrect.')
     } finally {
-      setPinLoading(false)
+      setLoginLoading(false)
     }
   }
 
@@ -47,7 +53,7 @@ export default function OnboardingPage() {
   const [selected, setSelected] = useState(() => serialParam ? new Set([serialParam]) : new Set())
   const [form, setForm]         = useState({
     first_name: '', last_name: '', afifly_name: '', email: '',
-    pin: '', pinConfirm: '',
+    password: '', passwordConfirm: '',
   })
   const [error, setError]   = useState('')
   const [loading, setLoading] = useState(false)
@@ -82,8 +88,8 @@ export default function OnboardingPage() {
   async function submitNew(e) {
     e.preventDefault()
     setError('')
-    if (!/^\d{4}$/.test(form.pin)) { setError('Le PIN doit contenir exactement 4 chiffres.'); return }
-    if (form.pin !== form.pinConfirm) { setError('Les deux PIN ne correspondent pas.'); return }
+    if (form.password.length < 8) { setError('Le mot de passe doit contenir au moins 8 caractères.'); return }
+    if (form.password !== form.passwordConfirm) { setError('Les deux mots de passe ne correspondent pas.'); return }
     clearInterval(pollRef.current)
     setLoading(true)
     try {
@@ -92,7 +98,7 @@ export default function OnboardingPage() {
         last_name:      form.last_name,
         afifly_name:    form.afifly_name || null,
         email:          form.email || null,
-        pin:            form.pin,
+        password:       form.password,
         camera_serials: [...selected],
       }
       const { data } = await api.post('/users/onboard', payload)
@@ -134,37 +140,43 @@ export default function OnboardingPage() {
     )
   }
 
-  // ── Rendu : parcours existant — saisie PIN ───────────────────────────────
+  // ── Rendu : parcours existant — email + mot de passe ───────────────────
   if (mode === 'existing') {
     return (
       <div className={styles.wrapper}>
         <div className={styles.card}>
           <button className={styles.back} onClick={() => setMode(null)}>← Retour</button>
-          <h1 className={styles.title}>Connexion par PIN</h1>
+          <h1 className={styles.title}>Connexion</h1>
           <p className={styles.subtitle}>
-            Entrez votre PIN à 4 chiffres pour associer cette caméra à votre compte.
+            Connectez-vous pour associer cette caméra à votre compte.
           </p>
-          <form onSubmit={submitPin} className={styles.form}>
+          <form onSubmit={submitLogin} className={styles.form}>
             <div className={styles.field}>
-              <label className={styles.label}>
-                PIN
-                <span className={styles.hint}>4 chiffres</span>
-              </label>
+              <label className={styles.label}>Email</label>
               <input
-                className={`${styles.input} ${styles.pinInput}`}
-                type="password"
-                inputMode="numeric"
-                maxLength={4}
-                value={pin}
-                onChange={e => setPin(e.target.value)}
-                placeholder="••••"
+                className={styles.input}
+                type="email"
+                value={loginForm.email}
+                onChange={setLoginField('email')}
                 autoFocus
                 required
+                autoComplete="email"
               />
             </div>
-            {pinError && <p className={styles.error}>{pinError}</p>}
-            <button type="submit" className={styles.button} disabled={pinLoading}>
-              {pinLoading ? 'Connexion…' : 'Se connecter et associer la caméra'}
+            <div className={styles.field}>
+              <label className={styles.label}>Mot de passe</label>
+              <input
+                className={styles.input}
+                type="password"
+                value={loginForm.password}
+                onChange={setLoginField('password')}
+                required
+                autoComplete="current-password"
+              />
+            </div>
+            {loginError && <p className={styles.error}>{loginError}</p>}
+            <button type="submit" className={styles.button} disabled={loginLoading}>
+              {loginLoading ? 'Connexion…' : 'Se connecter et associer la caméra'}
             </button>
           </form>
         </div>
@@ -207,10 +219,8 @@ export default function OnboardingPage() {
           </div>
 
           <div className={styles.field}>
-            <label className={styles.label}>
-              Email <span className={styles.optional}>(optionnel — pour recevoir les notifications)</span>
-            </label>
-            <input className={styles.input} type="email" value={form.email} onChange={setField('email')} />
+            <label className={styles.label}>Email *</label>
+            <input className={styles.input} type="email" value={form.email} onChange={setField('email')} required autoComplete="email" />
           </div>
 
           <div className={styles.divider} />
@@ -256,34 +266,30 @@ export default function OnboardingPage() {
 
           <div className={styles.divider} />
 
-          {/* PIN */}
+          {/* Mot de passe */}
           <div className={styles.row}>
             <div className={styles.field}>
               <label className={styles.label}>
-                PIN *
-                <span className={styles.hint}>4 chiffres</span>
+                Mot de passe *
+                <span className={styles.hint}>8 caractères minimum</span>
               </label>
               <input
                 className={styles.input}
                 type="password"
-                inputMode="numeric"
-                maxLength={4}
-                value={form.pin}
-                onChange={setField('pin')}
-                placeholder="••••"
+                value={form.password}
+                onChange={setField('password')}
+                autoComplete="new-password"
                 required
               />
             </div>
             <div className={styles.field}>
-              <label className={styles.label}>Confirmer le PIN *</label>
+              <label className={styles.label}>Confirmer *</label>
               <input
                 className={styles.input}
                 type="password"
-                inputMode="numeric"
-                maxLength={4}
-                value={form.pinConfirm}
-                onChange={setField('pinConfirm')}
-                placeholder="••••"
+                value={form.passwordConfirm}
+                onChange={setField('passwordConfirm')}
+                autoComplete="new-password"
                 required
               />
             </div>
