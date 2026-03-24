@@ -760,18 +760,24 @@ function RotDropZone({ rotId, onUploaded }) {
   const inputRef = useRef(null)
   const [dragOver, setDragOver] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [progress, setProgress] = useState(0)
   const [done, setDone] = useState(false)
   const [error, setError] = useState('')
 
   async function upload(file) {
     setUploading(true)
+    setProgress(0)
     setError('')
     setDone(false)
     try {
       const fd = new FormData()
       fd.append('file', file)
       fd.append('rot_id', String(rotId))
-      await api.post('/videos/upload', fd)
+      await api.post('/videos/upload', fd, {
+        onUploadProgress: e => {
+          if (e.total) setProgress(Math.round((e.loaded / e.total) * 100))
+        },
+      })
       setDone(true)
       setTimeout(() => setDone(false), 3000)
       onUploaded()
@@ -780,6 +786,7 @@ function RotDropZone({ rotId, onUploaded }) {
       setTimeout(() => setError(''), 4000)
     } finally {
       setUploading(false)
+      setProgress(0)
     }
   }
 
@@ -816,7 +823,7 @@ function RotDropZone({ rotId, onUploaded }) {
         }}
       />
       {uploading ? (
-        <span className={styles.dropZoneLabel}>Envoi…</span>
+        <span className={styles.dropZoneLabel}>{progress < 100 ? `${progress} %` : 'Traitement…'}</span>
       ) : done ? (
         <span className={styles.dropZoneLabel}>✓ Ajoutée</span>
       ) : error ? (
