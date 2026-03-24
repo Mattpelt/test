@@ -254,11 +254,21 @@ def ingest_device(device_node: str, serial: str, db: Session) -> None:
             )
             logger.info(f"Monté : {device_node} → {mount_point}")
         except subprocess.CalledProcessError as e:
-            logger.error(f"Impossible de monter {device_node} : {e}")
             os.rmdir(mount_point)
-            camera_state.update(usb_serial, status="ERROR", error_msg=str(e),
-                                 finished_at=time.time())
-            return
+            # Périphérique déjà monté par l'hôte (udisks2, automonteur…) ?
+            findmnt = subprocess.run(
+                ["findmnt", "-n", "-o", "TARGET", device_node],
+                capture_output=True, text=True,
+            )
+            if findmnt.returncode == 0 and findmnt.stdout.strip():
+                mount_point = findmnt.stdout.strip()
+                own_mount = False
+                logger.info(f"Périphérique déjà monté par l'hôte : {mount_point}")
+            else:
+                logger.error(f"Impossible de monter {device_node} : {e}")
+                camera_state.update(usb_serial, status="ERROR", error_msg=str(e),
+                                     finished_at=time.time())
+                return
 
     try:
         # Extraction du serial réel + make/model depuis les métadonnées .insv (Insta360)
