@@ -175,7 +175,7 @@ export default function KioskPage() {
 
     async function poll() {
       try {
-        const r = await fetch('/cameras/live')
+        const r = await fetch('/api/cameras/live')
         if (!r.ok) throw new Error(r.status)
         const data = await r.json()
         if (!cancelled) {
