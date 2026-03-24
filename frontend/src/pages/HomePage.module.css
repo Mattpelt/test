@@ -1385,6 +1385,182 @@
 .downloadBtnFull:disabled { opacity: 0.5; cursor: default; }
 .downloadBtnFull:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 
+/* ── Dashboard Monitoring ── */
+.monitoringDash {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.monitoringHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.monitoringTitle {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+  margin: 0;
+}
+
+.monitoringRefresh {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-muted);
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-family: inherit;
+  padding: 0.3rem 0.7rem;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.monitoringRefresh:hover { border-color: var(--color-accent); color: var(--color-accent-text); }
+.monitoringRefresh:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.875rem;
+}
+
+.statCard {
+  background: var(--color-surface);
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.statCardLabel {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+}
+
+.statCardValue {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--color-text-2);
+  line-height: 1.1;
+}
+
+.statCardSub {
+  font-size: 0.75rem;
+  color: var(--color-muted);
+}
+
+.statCardRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.statCardRowItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.78rem;
+  color: var(--color-muted);
+}
+
+.statCardRowVal {
+  color: var(--color-text-2);
+  font-weight: 600;
+}
+
+/* Gauge bar (disk, RAM, CPU) */
+.gaugeWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+}
+
+.gaugeBar {
+  width: 100%;
+  height: 6px;
+  background: var(--color-border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.gaugeFill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.gaugeFillOk      { background: #22c55e; }
+.gaugeFillWarn    { background: #f59e0b; }
+.gaugeFillCrit    { background: #ef4444; }
+
+.gaugeMeta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: var(--color-faint);
+}
+
+/* Recent videos table */
+.recentSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.recentTitle {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+}
+
+.recentTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.recentTable th {
+  text-align: left;
+  color: var(--color-faint);
+  font-weight: 600;
+  font-size: 0.72rem;
+  padding: 0 0.5rem 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.recentTable td {
+  padding: 0.5rem 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-muted);
+  vertical-align: middle;
+}
+
+.recentTable tbody tr:last-child td { border-bottom: none; }
+.recentTable tbody tr:hover td { background: var(--color-surface); }
+
+.recentFileName {
+  color: var(--color-text-2);
+  font-weight: 500;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
 /* ── videoContent gap sur mobile ── */
 @media (max-width: 640px) {
   .videoContent {

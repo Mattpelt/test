@@ -3,7 +3,7 @@ import { api } from '../api/client'
 import styles from '../pages/HomePage.module.css'
 import ConfirmModal from './ConfirmModal'
 
-const SUB_TABS = ['Utilisateurs', 'Rotations', 'Vidéos']
+const SUB_TABS = ['Utilisateurs', 'Rotations', 'Vidéos', 'Monitoring']
 
 export default function GestionTab() {
   const [sub, setSub] = useState('Utilisateurs')
@@ -25,6 +25,7 @@ export default function GestionTab() {
       {sub === 'Utilisateurs' && <UsersSubTab />}
       {sub === 'Rotations'    && <RotsSubTab />}
       {sub === 'Vidéos'       && <VideosSubTab />}
+      {sub === 'Monitoring'   && <MonitoringSubTab />}
     </div>
   )
 }
@@ -913,6 +914,243 @@ function VideosSubTab() {
             ))}
           </tbody>
         </table>
+      )}
+    </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────
+   Sous-onglet Monitoring
+───────────────────────────────────────────────── */
+function MonitoringSubTab() {
+  const [stats,   setStats]   = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error,   setError]   = useState('')
+
+  async function load() {
+    setLoading(true)
+    setError('')
+    try {
+      const { data } = await api.get('/admin/stats')
+      setStats(data)
+    } catch {
+      setError('Impossible de charger les statistiques.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { load() }, [])
+
+  /* ── helpers ── */
+  function fmtBytes(bytes) {
+    if (bytes == null) return '—'
+    if (bytes >= 1e12) return (bytes / 1e12).toFixed(1) + ' To'
+    if (bytes >= 1e9)  return (bytes / 1e9).toFixed(1)  + ' Go'
+    if (bytes >= 1e6)  return (bytes / 1e6).toFixed(1)  + ' Mo'
+    return (bytes / 1e3).toFixed(0) + ' Ko'
+  }
+
+  function fmtUptime(secs) {
+    if (secs == null) return '—'
+    const d = Math.floor(secs / 86400)
+    const h = Math.floor((secs % 86400) / 3600)
+    const m = Math.floor((secs % 3600) / 60)
+    if (d > 0) return `${d}j ${h}h`
+    if (h > 0) return `${h}h ${m}m`
+    return `${m}m`
+  }
+
+  function fmtDate(iso) {
+    if (!iso) return '—'
+    const d = new Date(iso)
+    return d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+  }
+
+  function gaugeClass(pct) {
+    if (pct == null) return styles.gaugeFillOk
+    if (pct >= 90)   return styles.gaugeFillCrit
+    if (pct >= 70)   return styles.gaugeFillWarn
+    return styles.gaugeFillOk
+  }
+
+  const diskPct = stats?.disk?.total
+    ? Math.round((stats.disk.used / stats.disk.total) * 100)
+    : null
+
+  return (
+    <div className={styles.monitoringDash}>
+      <div className={styles.monitoringHeader}>
+        <p className={styles.monitoringTitle}>Monitoring système</p>
+        <button className={styles.monitoringRefresh} onClick={load} disabled={loading}>
+          {loading ? 'Chargement…' : '↻ Rafraîchir'}
+        </button>
+      </div>
+
+      {error && <p className={styles.error}>{error}</p>}
+
+      {stats && (
+        <>
+          {/* ── Grille de cartes ── */}
+          <div className={styles.statsGrid}>
+
+            {/* Utilisateurs */}
+            <div className={styles.statCard}>
+              <span className={styles.statCardLabel}>Utilisateurs</span>
+              <span className={styles.statCardValue}>{stats.users.active}</span>
+              <span className={styles.statCardSub}>actifs / {stats.users.total} total</span>
+              <div className={styles.statCardRow}>
+                <div className={styles.statCardRowItem}>
+                  <span>Administrateurs</span>
+                  <span className={styles.statCardRowVal}>{stats.users.admins}</span>
+                </div>
+                <div className={styles.statCardRowItem}>
+                  <span>Inactifs</span>
+                  <span className={styles.statCardRowVal}>{stats.users.total - stats.users.active}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Vidéos */}
+            <div className={styles.statCard}>
+              <span className={styles.statCardLabel}>Vidéos</span>
+              <span className={styles.statCardValue}>{stats.videos.total}</span>
+              <span className={styles.statCardSub}>{fmtBytes(stats.videos.total_size_bytes)} au total</span>
+              <div className={styles.statCardRow}>
+                <div className={styles.statCardRowItem}>
+                  <span>Associées</span>
+                  <span className={styles.statCardRowVal}>{stats.videos.matched}</span>
+                </div>
+                <div className={styles.statCardRowItem}>
+                  <span>Non associées</span>
+                  <span className={styles.statCardRowVal}>{stats.videos.unmatched + stats.videos.ambiguous}</span>
+                </div>
+                <div className={styles.statCardRowItem}>
+                  <span>Manuelles</span>
+                  <span className={styles.statCardRowVal}>{stats.videos.manual}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Rotations */}
+            <div className={styles.statCard}>
+              <span className={styles.statCardLabel}>Rotations</span>
+              <span className={styles.statCardValue}>{stats.rots.total}</span>
+              <span className={styles.statCardSub}>au total</span>
+              <div className={styles.statCardRow}>
+                <div className={styles.statCardRowItem}>
+                  <span>Aujourd'hui</span>
+                  <span className={styles.statCardRowVal}>{stats.rots.today}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Disque */}
+            <div className={styles.statCard}>
+              <span className={styles.statCardLabel}>Disque</span>
+              <span className={styles.statCardValue}>{diskPct != null ? diskPct + '%' : '—'}</span>
+              <span className={styles.statCardSub}>{fmtBytes(stats.disk.used)} / {fmtBytes(stats.disk.total)}</span>
+              {diskPct != null && (
+                <div className={styles.gaugeWrap}>
+                  <div className={styles.gaugeBar}>
+                    <div
+                      className={`${styles.gaugeFill} ${gaugeClass(diskPct)}`}
+                      style={{ width: diskPct + '%' }}
+                    />
+                  </div>
+                  <div className={styles.gaugeMeta}>
+                    <span>Utilisé</span>
+                    <span>{fmtBytes(stats.disk.free)} libre</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* CPU */}
+            <div className={styles.statCard}>
+              <span className={styles.statCardLabel}>CPU</span>
+              <span className={styles.statCardValue}>
+                {stats.system.cpu_percent != null ? stats.system.cpu_percent.toFixed(0) + '%' : '—'}
+              </span>
+              <span className={styles.statCardSub}>utilisation</span>
+              {stats.system.cpu_percent != null && (
+                <div className={styles.gaugeWrap}>
+                  <div className={styles.gaugeBar}>
+                    <div
+                      className={`${styles.gaugeFill} ${gaugeClass(stats.system.cpu_percent)}`}
+                      style={{ width: stats.system.cpu_percent + '%' }}
+                    />
+                  </div>
+                </div>
+              )}
+              <div className={styles.statCardRow}>
+                <div className={styles.statCardRowItem}>
+                  <span>Uptime</span>
+                  <span className={styles.statCardRowVal}>{fmtUptime(stats.system.uptime_seconds)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* RAM */}
+            <div className={styles.statCard}>
+              <span className={styles.statCardLabel}>RAM</span>
+              <span className={styles.statCardValue}>
+                {stats.system.ram_percent != null ? stats.system.ram_percent.toFixed(0) + '%' : '—'}
+              </span>
+              <span className={styles.statCardSub}>{fmtBytes(stats.system.ram_used)} / {fmtBytes(stats.system.ram_total)}</span>
+              {stats.system.ram_percent != null && (
+                <div className={styles.gaugeWrap}>
+                  <div className={styles.gaugeBar}>
+                    <div
+                      className={`${styles.gaugeFill} ${gaugeClass(stats.system.ram_percent)}`}
+                      style={{ width: stats.system.ram_percent + '%' }}
+                    />
+                  </div>
+                  <div className={styles.gaugeMeta}>
+                    <span>Utilisé</span>
+                    <span>{fmtBytes(stats.system.ram_total - stats.system.ram_used)} libre</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+          </div>
+
+          {/* ── Vidéos récentes ── */}
+          <div className={styles.recentSection}>
+            <p className={styles.recentTitle}>Dernières vidéos ingérées</p>
+            {stats.recent_videos.length === 0 ? (
+              <p className={styles.empty}>Aucune vidéo.</p>
+            ) : (
+              <table className={styles.recentTable}>
+                <thead>
+                  <tr>
+                    <th>Fichier</th>
+                    <th>Taille</th>
+                    <th>Propriétaire</th>
+                    <th>Horodatage caméra</th>
+                    <th>Statut</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stats.recent_videos.map(v => (
+                    <tr key={v.id}>
+                      <td><span className={styles.recentFileName}>{v.file_name}</span></td>
+                      <td>{fmtBytes(v.file_size_bytes)}</td>
+                      <td>{v.owner ?? '—'}</td>
+                      <td>{fmtDate(v.camera_timestamp)}</td>
+                      <td>
+                        <span className={v.matching_status === 'MATCHED' ? styles.badgeOk : styles.badgeErr}>
+                          {v.matching_status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </>
       )}
     </div>
   )

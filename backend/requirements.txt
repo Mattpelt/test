@@ -34,3 +34,6 @@ email-validator==2.1.1
 
 # Upload de fichiers dans FastAPI
 python-multipart==0.0.9
+
+# Métriques système (CPU, RAM) pour le dashboard monitoring
+psutil==5.9.8
