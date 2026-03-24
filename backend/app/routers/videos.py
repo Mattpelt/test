@@ -225,6 +225,24 @@ def get_thumbnail(
 _ALLOWED_EXTS = {".mp4", ".mov", ".avi", ".mts", ".insv", ".mkv", ".m4v"}
 
 
+def _read_camera_timestamp(file_path: str) -> datetime:
+    """Lit la creation_time depuis les métadonnées vidéo via ffprobe. Fallback sur mtime."""
+    import json, subprocess
+    try:
+        result = subprocess.run(
+            ["ffprobe", "-v", "quiet", "-print_format", "json",
+             "-show_entries", "format_tags=creation_time", file_path],
+            capture_output=True, text=True, timeout=15,
+        )
+        if result.returncode == 0:
+            ts_str = json.loads(result.stdout).get("format", {}).get("tags", {}).get("creation_time")
+            if ts_str:
+                return datetime.fromisoformat(ts_str.replace("Z", "+00:00")).replace(tzinfo=None)
+    except Exception:
+        pass
+    return datetime.utcfromtimestamp(os.path.getmtime(file_path))
+
+
 @router.post("/upload", response_model=VideoResponse, status_code=status.HTTP_201_CREATED)
 async def upload_video(
     rot_id: int = Form(...),
@@ -260,6 +278,7 @@ async def upload_video(
 
     file_size = os.path.getsize(file_path)
     thumbnail_path = _generate_thumbnail(file_path)
+    camera_ts = _read_camera_timestamp(file_path)
 
     settings = db.query(Settings).first()
     retention_days = settings.retention_days if settings else 30
@@ -270,7 +289,7 @@ async def upload_video(
         file_path=file_path,
         file_format=ext.lstrip(".").upper() or None,
         file_size_bytes=file_size,
-        camera_timestamp=now,
+        camera_timestamp=camera_ts,
         owner_id=current_user.id,
         rot_id=rot_id,
         group_id=None,

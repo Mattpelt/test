@@ -244,7 +244,6 @@ function MyVideosTab({ onPreview, layoutMode }) {
                               {member.afifly_name}
                               {member.user_id === user.id && <span className={styles.meTag}>moi</span>}
                             </div>
-                            {member.level && <span className={styles.memberLevel}>{member.level}</span>}
                             {memberVideos.length === 0 ? (
                               <p className={styles.noVideo}>Pas de vidéo</p>
                             ) : (
@@ -307,7 +306,7 @@ function VideoCard({ video, onPreview, onDownload, downloading }) {
 
   return (
     <li className={styles.videoItem}>
-      {/* Vignette — placeholder si absente */}
+      {/* Vignette cliquable avec overlay play */}
       <div className={styles.videoThumbWrap} onClick={() => onPreview(video)}>
         {video.thumbnail_path ? (
           <img
@@ -316,35 +315,37 @@ function VideoCard({ video, onPreview, onDownload, downloading }) {
             alt=""
           />
         ) : (
-          <div className={styles.videoThumbPlaceholder}>▶</div>
+          <div className={styles.videoThumbPlaceholder} />
         )}
+        <div className={styles.videoPlayOverlay}>
+          <svg className={styles.videoPlayIcon} width="22" height="22" viewBox="0 0 24 24" fill="white">
+            <circle cx="12" cy="12" r="12" fill="rgba(0,0,0,0.45)" />
+            <polygon points="10,8 18,12 10,16" fill="white" />
+          </svg>
+        </div>
       </div>
 
       <div className={styles.videoInfo}>
-        {/* Titre lisible : heure de prise de vue */}
-        <span className={styles.videoTitle}>
-          {formatVideoTime(video.camera_timestamp)}
-        </span>
+        <span className={styles.videoTitle}>{formatVideoTime(video.camera_timestamp)}</span>
         <span className={styles.videoMeta}>
           {video.file_format}
           {video.file_size_bytes ? ` · ${formatSize(video.file_size_bytes)}` : ''}
         </span>
         <span className={styles.videoName}>{video.file_name}</span>
-        <div className={styles.videoActions}>
-          <button
-            className={styles.previewBtn}
-            onClick={() => onPreview(video)}
-          >
-            Aperçu
-          </button>
-          <button
-            className={styles.downloadBtn}
-            onClick={() => onDownload(video.id, video.file_name)}
-            disabled={downloading}
-          >
-            {downloading ? 'Préparation…' : 'Télécharger'}
-          </button>
-        </div>
+        <button
+          className={styles.downloadIconBtn}
+          onClick={() => onDownload(video.id, video.file_name)}
+          disabled={downloading}
+          title="Télécharger"
+        >
+          {downloading ? '…' : (
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+          )}
+        </button>
       </div>
     </li>
   )
