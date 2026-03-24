@@ -354,11 +354,11 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: var(--color-border);
+  color: var(--color-dim);
   font-size: 0.75rem;
 }
 
-.manualHint { color: var(--color-border); }
+.manualHint { color: var(--color-dim); }
 
 .manualInput {
   display: flex;
@@ -369,7 +369,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--color-border);
+  background: var(--color-dim);
   flex-shrink: 0;
   animation: pulse 1.6s ease-in-out infinite;
 }

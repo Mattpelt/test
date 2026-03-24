@@ -24,12 +24,12 @@
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #888;
+  color: #bbb;
 }
 
 .headerRight {
   font-size: 0.75rem;
-  color: #555;
+  color: #aaa;
 }
 
 .connError {
@@ -113,7 +113,7 @@
 .cameraLabel {
   font-size: 0.8rem;
   font-weight: 500;
-  color: #666;
+  color: #aaa;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -156,7 +156,7 @@
 .ownerPending {
   font-size: 0.9rem;
   font-weight: 400;
-  color: #444;
+  color: #888;
   letter-spacing: 0.05em;
 }
 
@@ -252,7 +252,7 @@
 
 .spinnerLabel {
   font-size: 0.8rem;
-  color: #555;
+  color: #aaa;
 }
 
 @keyframes spin {
@@ -307,7 +307,7 @@
 
 .fileCount {
   font-size: 0.75rem;
-  color: #777;
+  color: #aaa;
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -384,13 +384,13 @@
 .emptyTitle {
   font-size: 1.2rem;
   font-weight: 600;
-  color: #555;
+  color: #ccc;
   margin: 0;
 }
 
 .emptySub {
   font-size: 0.85rem;
-  color: #3a3a3a;
+  color: #999;
   margin: 0;
 }
 
@@ -404,12 +404,12 @@
 
 .footerLink {
   font-size: 0.75rem;
-  color: #444;
+  color: #888;
   text-decoration: none;
   transition: color 0.15s;
 }
 
-.footerLink:hover { color: #888; }
+.footerLink:hover { color: #ddd; }
 
 /* ── Responsive mobile ────────────────────────────────────────────────────── */
 
