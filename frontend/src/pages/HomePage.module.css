@@ -573,6 +573,53 @@
 .rotHeader {
   padding: 1rem 1.25rem 0.875rem;
   border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+/* ── Drop zone upload manuel ── */
+.dropZone {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1.5px dashed var(--color-border);
+  border-radius: 8px;
+  color: var(--color-faint);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 500;
+  padding: 0.45rem 0.875rem;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  user-select: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.dropZone:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.dropZoneOver {
+  border-color: var(--color-accent);
+  background: rgba(59, 130, 246, 0.08);
+  color: var(--color-accent);
+}
+
+.dropZoneDone {
+  border-color: var(--color-success);
+  color: var(--color-success);
+}
+
+.dropZoneError {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+.dropZoneLabel {
+  pointer-events: none;
 }
 
 .rotTitle {

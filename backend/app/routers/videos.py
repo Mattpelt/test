@@ -1,6 +1,10 @@
+import os
+import shutil
+from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user, require_admin, SECRET_KEY, ALGORITHM
@@ -216,6 +220,69 @@ def get_thumbnail(
         "Content-Type": "image/jpeg",
         "Cache-Control": "max-age=86400",
     })
+
+
+_ALLOWED_EXTS = {".mp4", ".mov", ".avi", ".mts", ".insv", ".mkv", ".m4v"}
+
+
+@router.post("/upload", response_model=VideoResponse, status_code=status.HTTP_201_CREATED)
+async def upload_video(
+    rot_id: int = Form(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Upload manuel d'une vidéo dans une rotation donnée."""
+    from app.models.rot import Rot
+    from app.models.settings import Settings
+    from app.services.video_ingestor import _generate_thumbnail
+
+    rot = db.query(Rot).filter(Rot.id == rot_id).first()
+    if not rot:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rotation introuvable.")
+
+    ext = Path(file.filename).suffix.lower()
+    if ext not in _ALLOWED_EXTS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Format non supporté. Formats acceptés : {', '.join(sorted(_ALLOWED_EXTS))}",
+        )
+
+    upload_dir = Path(f"/mnt/videos/manual/{current_user.id}")
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    safe_name = f"{ts}_{Path(file.filename).name}"
+    file_path = str(upload_dir / safe_name)
+
+    with open(file_path, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    file_size = os.path.getsize(file_path)
+    thumbnail_path = _generate_thumbnail(file_path)
+
+    settings = db.query(Settings).first()
+    retention_days = settings.retention_days if settings else 30
+
+    now = datetime.utcnow()
+    video = Video(
+        file_name=file.filename,
+        file_path=file_path,
+        file_format=ext.lstrip(".").upper() or None,
+        file_size_bytes=file_size,
+        camera_timestamp=now,
+        owner_id=current_user.id,
+        rot_id=rot_id,
+        group_id=None,
+        matching_status="MANUAL",
+        thumbnail_path=thumbnail_path,
+        ingested_at=now,
+        expires_at=now + timedelta(days=retention_days),
+    )
+    db.add(video)
+    db.commit()
+    db.refresh(video)
+    return video
 
 
 @router.patch("/{video_id}", response_model=VideoResponse)

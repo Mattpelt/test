@@ -92,24 +92,22 @@ function MyVideosTab({ onPreview, layoutMode }) {
   const [search, setSearch] = useState('')
   const [downloadingIds, setDownloadingIds] = useState(new Set())
 
-  useEffect(() => {
-    async function load() {
-      try {
-        // 2 requêtes au lieu de N+1
-        const [{ data: myRots }, { data: byRot }] = await Promise.all([
-          api.get('/rots/my'),
-          api.get('/videos/my-rots'),
-        ])
-        setRots(myRots)
-        setVideosByRot(byRot)
-      } catch {
-        setError('Impossible de charger vos données.')
-      } finally {
-        setLoading(false)
-      }
+  async function load() {
+    try {
+      const [{ data: myRots }, { data: byRot }] = await Promise.all([
+        api.get('/rots/my'),
+        api.get('/videos/my-rots'),
+      ])
+      setRots(myRots)
+      setVideosByRot(byRot)
+    } catch {
+      setError('Impossible de charger vos données.')
+    } finally {
+      setLoading(false)
     }
-    load()
-  }, [])
+  }
+
+  useEffect(() => { load() }, [])
 
   function handleDownload(videoId, fileName) {
     setDownloadingIds(prev => new Set(prev).add(videoId))
@@ -224,14 +222,17 @@ function MyVideosTab({ onPreview, layoutMode }) {
                 {layoutMode === 'desktop' && (
                   <section className={styles.rotSection}>
                     <div className={styles.rotHeader}>
-                      <h2 className={styles.rotTitle}>
-                        Rot n°{rot.rot_number}
-                        {rot.day_number ? ` — saut n°${rot.day_number}` : ''}
-                      </h2>
-                      <span className={styles.rotMeta}>
-                        {formatDate(rot.rot_date)} · {formatTime(rot.rot_time)}
-                        {rot.plane_registration ? ` · ${rot.plane_registration}` : ''}
-                      </span>
+                      <div>
+                        <h2 className={styles.rotTitle}>
+                          Rot n°{rot.rot_number}
+                          {rot.day_number ? ` — saut n°${rot.day_number}` : ''}
+                        </h2>
+                        <span className={styles.rotMeta}>
+                          {formatDate(rot.rot_date)} · {formatTime(rot.rot_time)}
+                          {rot.plane_registration ? ` · ${rot.plane_registration}` : ''}
+                        </span>
+                      </div>
+                      <RotDropZone rotId={rot.id} onUploaded={load} />
                     </div>
 
                     <div className={styles.membersGrid}>
@@ -748,6 +749,88 @@ function VideoPlayerModal({ video, onClose }) {
           playsInline
         />
       </div>
+    </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────
+   Zone de drop pour upload manuel dans une rotation
+───────────────────────────────────────────────── */
+function RotDropZone({ rotId, onUploaded }) {
+  const inputRef = useRef(null)
+  const [dragOver, setDragOver] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [done, setDone] = useState(false)
+  const [error, setError] = useState('')
+
+  async function upload(file) {
+    setUploading(true)
+    setError('')
+    setDone(false)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('rot_id', String(rotId))
+      await api.post('/videos/upload', fd)
+      setDone(true)
+      setTimeout(() => setDone(false), 3000)
+      onUploaded()
+    } catch (err) {
+      setError(err.response?.data?.detail ?? 'Erreur upload.')
+      setTimeout(() => setError(''), 4000)
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  function onDrop(e) {
+    e.preventDefault()
+    setDragOver(false)
+    const file = e.dataTransfer.files[0]
+    if (file) upload(file)
+  }
+
+  let zoneClass = styles.dropZone
+  if (dragOver)  zoneClass += ` ${styles.dropZoneOver}`
+  if (done)      zoneClass += ` ${styles.dropZoneDone}`
+  if (error)     zoneClass += ` ${styles.dropZoneError}`
+
+  return (
+    <div
+      className={zoneClass}
+      onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+      onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOver(false) }}
+      onDrop={onDrop}
+      onClick={() => !uploading && inputRef.current?.click()}
+      title="Glisser-déposer ou cliquer pour ajouter une vidéo"
+    >
+      <input
+        ref={inputRef}
+        type="file"
+        accept="video/*,.insv,.mts"
+        style={{ display: 'none' }}
+        onChange={e => {
+          const file = e.target.files[0]
+          if (file) upload(file)
+          e.target.value = ''
+        }}
+      />
+      {uploading ? (
+        <span className={styles.dropZoneLabel}>Envoi…</span>
+      ) : done ? (
+        <span className={styles.dropZoneLabel}>✓ Ajoutée</span>
+      ) : error ? (
+        <span className={styles.dropZoneLabel}>{error}</span>
+      ) : (
+        <>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          <span className={styles.dropZoneLabel}>Ajouter</span>
+        </>
+      )}
     </div>
   )
 }
