@@ -321,8 +321,8 @@
 
 .badgeAdmin { background: var(--color-accent-bg); color: var(--color-accent-text); }
 .badgeUser  { background: var(--color-surface); color: var(--color-muted); border: 1px solid var(--color-border); }
-.badgeOk    { background: #14532d; color: #86efac; }
-.badgeErr   { background: #450a0a; color: #fca5a5; }
+.badgeOk    { background: var(--color-badge-ok-bg);  color: var(--color-badge-ok-text); }
+.badgeErr   { background: var(--color-badge-err-bg); color: var(--color-badge-err-text); }
 
 /* ── Buttons ── */
 .primaryBtn {

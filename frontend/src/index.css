@@ -1,19 +1,59 @@
-/* ── Design tokens ── */
+/* ── Design tokens — Mode sombre (défaut) ── */
 :root {
-  --color-bg:          #0f172a;  /* slate-900 — fond principal */
-  --color-surface:     #1e293b;  /* slate-800 — cartes, header */
-  --color-border:      #334155;  /* slate-700 — bordures */
-  --color-text:        #f1f5f9;  /* slate-100 — texte primaire */
-  --color-text-2:      #e2e8f0;  /* slate-200 — texte secondaire */
-  --color-muted:       #94a3b8;  /* slate-400 — texte atténué */
-  --color-faint:       #64748b;  /* slate-500 — texte très atténué */
-  --color-dim:         #475569;  /* slate-600 — placeholders */
-  --color-accent:      #3b82f6;  /* blue-500  — action principale */
-  --color-accent-dark: #2563eb;  /* blue-600  — hover accent */
-  --color-accent-bg:   #1e3a5f;  /* fond badge admin */
-  --color-accent-text: #60a5fa;  /* blue-400  — texte accent */
-  --color-danger:      #f87171;  /* red-400   — erreurs */
-  --color-success:     #86efac;  /* green-300 — succès */
+  --color-bg:           #0f172a;
+  --color-surface:      #1e293b;
+  --color-border:       #334155;
+  --color-text:         #f1f5f9;
+  --color-text-2:       #e2e8f0;
+  --color-muted:        #94a3b8;
+  --color-faint:        #64748b;
+  --color-dim:          #475569;
+  --color-accent:       #3b82f6;
+  --color-accent-dark:  #2563eb;
+  --color-accent-bg:    #1e3a5f;
+  --color-accent-text:  #60a5fa;
+  --color-danger:       #f87171;
+  --color-success:      #86efac;
+
+  /* Badges statut */
+  --color-badge-ok-bg:       #14532d;
+  --color-badge-ok-text:     #86efac;
+  --color-badge-err-bg:      #450a0a;
+  --color-badge-err-text:    #fca5a5;
+  --color-badge-admin-bg:    #1e3a5f;
+  --color-badge-admin-text:  #60a5fa;
+
+  /* Hover carte pending (profil) */
+  --color-pending-hover: #0f1f38;
+}
+
+/* ── Design tokens — Mode clair ── */
+[data-theme="light"] {
+  --color-bg:           #f1f5f9;
+  --color-surface:      #ffffff;
+  --color-border:       #e2e8f0;
+  --color-text:         #0f172a;
+  --color-text-2:       #1e293b;
+  --color-muted:        #475569;
+  --color-faint:        #64748b;
+  --color-dim:          #94a3b8;
+  --color-accent:       #2563eb;
+  --color-accent-dark:  #1d4ed8;
+  --color-accent-bg:    #dbeafe;
+  --color-accent-text:  #1d4ed8;
+  --color-danger:       #dc2626;
+  --color-success:      #16a34a;
+
+  /* Badges statut */
+  --color-badge-ok-bg:       #dcfce7;
+  --color-badge-ok-text:     #15803d;
+  --color-badge-err-bg:      #fee2e2;
+  --color-badge-err-text:    #dc2626;
+  --color-badge-admin-bg:    #dbeafe;
+  --color-badge-admin-text:  #1d4ed8;
+
+  /* Hover carte pending (profil) */
+  --color-pending-hover: #eff6ff;
 }
 
 *, *::before, *::after {
@@ -25,6 +65,8 @@ html, body {
   padding: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
+  background: var(--color-bg);
+  color: var(--color-text);
 }
 
 #root {
