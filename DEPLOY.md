@@ -282,18 +282,39 @@ sudo chmod +x /usr/local/bin/skydive-storage-worker.sh
 
 > **Note Insta360 Mass Storage** : ces caméras exposent le serial USB générique `0001`. Le vrai serial unique est extrait automatiquement des métadonnées `.insv` lors de la première ingestion, et le compte utilisateur est mis à jour. Après la première ingestion réussie, chaque caméra est reconnue par son vrai serial.
 
+### Script de débranchement (commun MTP + Mass Storage)
+
+```bash
+sudo tee /usr/local/bin/skydive-disconnect.sh > /dev/null <<'EOF'
+#!/bin/bash
+LOG=/tmp/skydive-camera.log
+echo "[$(date)] udev disconnect: serial=$ID_SERIAL_SHORT" >> "$LOG"
+/usr/bin/systemd-run --no-block \
+  /usr/bin/curl -s -X POST http://127.0.0.1:8000/internal/camera-disconnected \
+  -H "Content-Type: application/json" \
+  -d "{\"serial\": \"$ID_SERIAL_SHORT\"}" >> "$LOG" 2>&1
+EOF
+sudo chmod +x /usr/local/bin/skydive-disconnect.sh
+```
+
 ### Règle udev
 
 ```bash
 sudo tee /etc/udev/rules.d/99-skydive-camera.rules > /dev/null <<'EOF'
-# Caméras MTP/PTP (GoPro via gphoto2, Sony, etc.)
-ACTION=="bind", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ENV{ID_GPHOTO2}=="1", RUN+="/usr/local/bin/skydive-camera.sh"
-# Caméras USB Mass Storage (Insta360, cartes SD)
-ACTION=="add", SUBSYSTEM=="block", ENV{ID_BUS}=="usb", ENV{DEVTYPE}=="partition", RUN+="/usr/local/bin/skydive-storage.sh"
+# Branchement — caméras MTP/PTP (GoPro via gphoto2, Sony, etc.)
+ACTION=="bind",   SUBSYSTEM=="usb",   ENV{DEVTYPE}=="usb_device", ENV{ID_GPHOTO2}=="1",      RUN+="/usr/local/bin/skydive-camera.sh"
+# Branchement — caméras USB Mass Storage (Insta360, cartes SD)
+ACTION=="add",    SUBSYSTEM=="block", ENV{ID_BUS}=="usb",         ENV{DEVTYPE}=="partition", RUN+="/usr/local/bin/skydive-storage.sh"
+# Débranchement — GoPro HERO (le serial est sur l'interface réseau NCM au remove)
+ACTION=="remove", SUBSYSTEM=="net",   ENV{ID_BUS}=="usb",         ENV{ID_VENDOR_ID}=="2672", RUN+="/usr/local/bin/skydive-disconnect.sh"
+# Débranchement — Insta360 Mass Storage
+ACTION=="remove", SUBSYSTEM=="block", ENV{ID_BUS}=="usb",         ENV{DEVTYPE}=="partition", RUN+="/usr/local/bin/skydive-disconnect.sh"
 EOF
 
 sudo udevadm control --reload-rules
 ```
+
+> **Pourquoi des règles remove différentes par type ?** Au moment d'un `ACTION=remove`, l'événement `usb_device` n'expose pas `ID_SERIAL_SHORT`. Pour GoPro (USB NCM), le serial est disponible sur l'interface réseau (`SUBSYSTEM=net`). Pour Insta360 (Mass Storage), sur la partition block.
 
 ---
 
@@ -532,6 +553,7 @@ skydivemediahub/
 | GET | `/settings` | admin | Lire la configuration |
 | PATCH | `/settings` | admin | Modifier la configuration (dont SMTP) |
 | POST | `/internal/camera-connected` | public | Déclencheur d'ingestion (udev) |
+| POST | `/internal/camera-disconnected` | public | Débranchement USB → retire la card kiosque |
 | GET | `/admin/stats` | admin | Métriques système (CPU, RAM, disque, vidéos, users) |
 | GET | `/admin/logs` | admin | Logs backend en temps réel (buffer 500 entrées) |
 | GET | `/cameras/live` | **public** | État temps réel des caméras en cours d'ingestion (kiosque) |

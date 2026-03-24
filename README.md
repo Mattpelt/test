@@ -41,6 +41,11 @@ v0.8 — Dashboard monitoring admin (CPU/RAM/disque/logs),
         architecture udev Mass Storage refactorisée
         (trigger + worker, attente montage udisks2),
         vendor_id et model transmis au backend
+v0.9 — Kiosque : illustration SVG caméra par modèle (GoPro,
+        Insta360, générique), débranchement USB détecté via udev
+        (card disparaît 10s après débranchement — plus de timer
+        fixe), correction contrastes UI dark/light mode (WCAG AA),
+        fix Insta360 : /media:/media bind-montée dans le container
 
 
 --------------------------------------------------------
@@ -517,7 +522,8 @@ TABLE : settings (une seule ligne, initialisée au démarrage)
   PATCH  /settings                 — modifier la configuration (dont SMTP)
 
 /internal  (public — appelé par udev sur l'hôte)
-  POST   /internal/camera-connected — déclencheur d'ingestion
+  POST   /internal/camera-connected    — déclencheur d'ingestion
+  POST   /internal/camera-disconnected — débranchement USB (kiosque)
 
 
 8.7 ARCHITECTURE DÉTECTION ET INGESTION CAMÉRA
@@ -548,13 +554,23 @@ SOLUTION RETENUE :
     ACTION=="bind", SUBSYSTEM=="usb", ENV{ID_GPHOTO2}=="1", \
     RUN+="/usr/local/bin/skydive-camera.sh"
 
-  Trois scripts sur l'hôte (configurés par setup.sh) :
-    /usr/local/bin/skydive-camera.sh        — trigger MTP/PTP
-    /usr/local/bin/skydive-storage.sh       — trigger Mass Storage
-    /usr/local/bin/skydive-storage-worker.sh — worker : attend
-      que udisks2 monte le device (lsblk, max 10s), passe le chemin
-      de montage au backend. Évite les conflits de montage entre
-      l'hôte et le container Docker.
+  Quatre scripts sur l'hôte (configurés par setup.sh) :
+    /usr/local/bin/skydive-camera.sh         — trigger branchement MTP/PTP
+    /usr/local/bin/skydive-storage.sh        — trigger branchement Mass Storage
+    /usr/local/bin/skydive-storage-worker.sh — worker : attend que udisks2
+      monte le device (lsblk, max 10s), passe le chemin de montage au backend
+    /usr/local/bin/skydive-disconnect.sh     — trigger débranchement (commun
+      MTP et Mass Storage) → POST /internal/camera-disconnected
+
+  Règles udev (/etc/udev/rules.d/99-skydive-camera.rules) :
+    bind/usb  + ID_GPHOTO2==1        → skydive-camera.sh     (branchement MTP)
+    add/block + ID_BUS==usb          → skydive-storage.sh    (branchement Mass Storage)
+    remove/net + ID_VENDOR_ID==2672  → skydive-disconnect.sh (débranchement GoPro)
+    remove/block + ID_BUS==usb       → skydive-disconnect.sh (débranchement Insta360)
+
+  NOTE : au remove, ID_SERIAL_SHORT n'est pas disponible sur l'événement
+  usb_device. Pour GoPro, le serial est porté par l'interface réseau NCM
+  (SUBSYSTEM=net). Pour Insta360 Mass Storage, par la partition block.
 
   Les scripts transmettent vendor_id et model_name pour affichage
   dans le kiosque. Le backend enrichit ces infos depuis la table
@@ -715,12 +731,15 @@ PAGES :
   LoginPage — formulaire email/mot de passe
   KioskPage — page plein écran sombre, polling /cameras/live
               toutes les secondes, 1 card par caméra connectée :
+                · Illustration SVG de la caméra (GoPro / Insta360 / générique)
+                · Badge statut sur l'illustration (✓ / ✗ / !)
                 · Nom propriétaire (très grand, lisible de loin)
                 · Anneau SVG de progression (% byte-level)
                 · Vitesse de transfert (Mo/s)
                 · Barre de progression fichiers (X/N)
                 · Chips rotations matchées
                 · Animations selon statut (spinner, checkmark, erreur)
+                · Card disparaît 10s après débranchement physique USB
   HomePage  — onglets pour tous : Mes vidéos, Mon compte
               onglets admin uniquement :
                 · Dashboard   : métriques CPU/RAM/disque + logs backend
