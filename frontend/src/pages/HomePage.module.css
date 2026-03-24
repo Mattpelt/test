@@ -1561,6 +1561,65 @@
   max-width: 220px;
 }
 
+/* ── Log panel ── */
+.logPanel {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  max-height: 480px;
+  overflow-y: auto;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.75rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.logLine {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.3rem 0.875rem;
+  border-bottom: 1px solid var(--color-border);
+  line-height: 1.5;
+}
+
+.logLine:last-child { border-bottom: none; }
+.logLine:hover { background: var(--color-surface); }
+
+.logTs {
+  color: var(--color-dim);
+  flex-shrink: 0;
+  font-size: 0.72rem;
+}
+
+.logLevel {
+  flex-shrink: 0;
+  font-weight: 700;
+  font-size: 0.68rem;
+  width: 4.5rem;
+  text-align: right;
+}
+
+.logLevelInfo  { color: var(--color-muted); }
+.logLevelWarn  { color: #f59e0b; }
+.logLevelError { color: var(--color-danger); }
+
+.logLogger {
+  flex-shrink: 0;
+  color: var(--color-accent-text);
+  font-size: 0.72rem;
+  width: 7rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logMsg {
+  color: var(--color-text-2);
+  word-break: break-word;
+  flex: 1;
+}
+
 /* ── videoContent gap sur mobile ── */
 @media (max-width: 640px) {
   .videoContent {

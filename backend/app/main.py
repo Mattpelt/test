@@ -18,6 +18,7 @@ from app.models.settings import Settings
 from app.services.usb_watcher import start_usb_watcher
 from app.services.retention import cleanup_expired_videos
 from app.routers import auth, users, rots, videos, internal, settings, admin_stats
+from app import log_buffer
 
 logging.basicConfig(
     level=logging.INFO,
@@ -47,6 +48,7 @@ def on_startup():
         for hdlr in lgr.handlers:
             hdlr.addFilter(_f)
     """Au démarrage : création des tables, migrations, settings par défaut, surveillant USB."""
+    log_buffer.install()
     logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     logger.info("  SkyDive Media Hub — Démarrage")
     logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")

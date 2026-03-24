@@ -15,6 +15,7 @@ from app.models.user import User
 from app.models.video import Video
 from app.models.rot import Rot
 from app.models.settings import Settings
+from app import log_buffer
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -64,26 +65,6 @@ def get_stats(db: Session = Depends(get_db), _: User = Depends(require_admin)):
         pass
 
     # ── Vidéos récentes (10 dernières) ────────────────────────────
-    recent_rows = (
-        db.query(Video, User)
-        .outerjoin(User, Video.owner_id == User.id)
-        .order_by(Video.ingested_at.desc())
-        .limit(10)
-        .all()
-    )
-    recent_videos = [
-        {
-            "id":               v.id,
-            "file_name":        v.file_name,
-            "file_size_bytes":  v.file_size_bytes,
-            "camera_timestamp": v.camera_timestamp.isoformat() if v.camera_timestamp else None,
-            "ingested_at":      v.ingested_at.isoformat()      if v.ingested_at      else None,
-            "matching_status":  v.matching_status,
-            "owner":            f"{u.first_name} {u.last_name}" if u else None,
-        }
-        for v, u in recent_rows
-    ]
-
     return {
         "users": {
             "total":  total_users,
@@ -115,5 +96,9 @@ def get_stats(db: Session = Depends(get_db), _: User = Depends(require_admin)):
             "ram_percent":    ram_percent,
             "uptime_seconds": uptime_seconds,
         },
-        "recent_videos": recent_videos,
     }
+
+
+@router.get("/logs")
+def get_logs(limit: int = 200, _: User = Depends(require_admin)):
+    return log_buffer.get_logs(limit=limit)

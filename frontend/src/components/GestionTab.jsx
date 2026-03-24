@@ -923,24 +923,42 @@ export function VideosSubTab() {
    Sous-onglet Monitoring
 ───────────────────────────────────────────────── */
 export function MonitoringSubTab() {
-  const [stats,   setStats]   = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error,   setError]   = useState('')
+  const [stats,        setStats]        = useState(null)
+  const [logs,         setLogs]         = useState(null)
+  const [loadingStats, setLoadingStats] = useState(true)
+  const [loadingLogs,  setLoadingLogs]  = useState(true)
+  const [error,        setError]        = useState('')
+  const logsEndRef = useRef(null)
 
-  async function load() {
-    setLoading(true)
-    setError('')
+  async function loadStats() {
+    setLoadingStats(true)
     try {
       const { data } = await api.get('/admin/stats')
       setStats(data)
     } catch {
       setError('Impossible de charger les statistiques.')
     } finally {
-      setLoading(false)
+      setLoadingStats(false)
     }
   }
 
-  useEffect(() => { load() }, [])
+  async function loadLogs() {
+    setLoadingLogs(true)
+    try {
+      const { data } = await api.get('/admin/logs?limit=200')
+      setLogs(data)
+    } catch {
+      // silencieux si stats ont déjà affiché une erreur
+    } finally {
+      setLoadingLogs(false)
+    }
+  }
+
+  async function refresh() {
+    await Promise.all([loadStats(), loadLogs()])
+  }
+
+  useEffect(() => { refresh() }, [])
 
   /* ── helpers ── */
   function fmtBytes(bytes) {
@@ -961,10 +979,10 @@ export function MonitoringSubTab() {
     return `${m}m`
   }
 
-  function fmtDate(iso) {
-    if (!iso) return '—'
+  function fmtTs(iso) {
+    if (!iso) return ''
     const d = new Date(iso)
-    return d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+    return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
   }
 
   function gaugeClass(pct) {
@@ -974,15 +992,23 @@ export function MonitoringSubTab() {
     return styles.gaugeFillOk
   }
 
+  function logLevelClass(level) {
+    if (level === 'ERROR' || level === 'CRITICAL') return styles.logLevelError
+    if (level === 'WARNING') return styles.logLevelWarn
+    return styles.logLevelInfo
+  }
+
   const diskPct = stats?.disk?.total
     ? Math.round((stats.disk.used / stats.disk.total) * 100)
     : null
+
+  const loading = loadingStats && loadingLogs
 
   return (
     <div className={styles.monitoringDash}>
       <div className={styles.monitoringHeader}>
         <p className={styles.monitoringTitle}>Monitoring système</p>
-        <button className={styles.monitoringRefresh} onClick={load} disabled={loading}>
+        <button className={styles.monitoringRefresh} onClick={refresh} disabled={loading}>
           {loading ? 'Chargement…' : '↻ Rafraîchir'}
         </button>
       </div>
@@ -990,168 +1016,143 @@ export function MonitoringSubTab() {
       {error && <p className={styles.error}>{error}</p>}
 
       {stats && (
-        <>
-          {/* ── Grille de cartes ── */}
-          <div className={styles.statsGrid}>
+        <div className={styles.statsGrid}>
 
-            {/* Utilisateurs */}
-            <div className={styles.statCard}>
-              <span className={styles.statCardLabel}>Utilisateurs</span>
-              <span className={styles.statCardValue}>{stats.users.active}</span>
-              <span className={styles.statCardSub}>actifs / {stats.users.total} total</span>
-              <div className={styles.statCardRow}>
-                <div className={styles.statCardRowItem}>
-                  <span>Administrateurs</span>
-                  <span className={styles.statCardRowVal}>{stats.users.admins}</span>
-                </div>
-                <div className={styles.statCardRowItem}>
-                  <span>Inactifs</span>
-                  <span className={styles.statCardRowVal}>{stats.users.total - stats.users.active}</span>
-                </div>
+          {/* Utilisateurs */}
+          <div className={styles.statCard}>
+            <span className={styles.statCardLabel}>Utilisateurs</span>
+            <span className={styles.statCardValue}>{stats.users.active}</span>
+            <span className={styles.statCardSub}>actifs / {stats.users.total} total</span>
+            <div className={styles.statCardRow}>
+              <div className={styles.statCardRowItem}>
+                <span>Administrateurs</span>
+                <span className={styles.statCardRowVal}>{stats.users.admins}</span>
+              </div>
+              <div className={styles.statCardRowItem}>
+                <span>Inactifs</span>
+                <span className={styles.statCardRowVal}>{stats.users.total - stats.users.active}</span>
               </div>
             </div>
-
-            {/* Vidéos */}
-            <div className={styles.statCard}>
-              <span className={styles.statCardLabel}>Vidéos</span>
-              <span className={styles.statCardValue}>{stats.videos.total}</span>
-              <span className={styles.statCardSub}>{fmtBytes(stats.videos.total_size_bytes)} au total</span>
-              <div className={styles.statCardRow}>
-                <div className={styles.statCardRowItem}>
-                  <span>Associées</span>
-                  <span className={styles.statCardRowVal}>{stats.videos.matched}</span>
-                </div>
-                <div className={styles.statCardRowItem}>
-                  <span>Non associées</span>
-                  <span className={styles.statCardRowVal}>{stats.videos.unmatched + stats.videos.ambiguous}</span>
-                </div>
-                <div className={styles.statCardRowItem}>
-                  <span>Manuelles</span>
-                  <span className={styles.statCardRowVal}>{stats.videos.manual}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Rotations */}
-            <div className={styles.statCard}>
-              <span className={styles.statCardLabel}>Rotations</span>
-              <span className={styles.statCardValue}>{stats.rots.total}</span>
-              <span className={styles.statCardSub}>au total</span>
-              <div className={styles.statCardRow}>
-                <div className={styles.statCardRowItem}>
-                  <span>Aujourd'hui</span>
-                  <span className={styles.statCardRowVal}>{stats.rots.today}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Disque */}
-            <div className={styles.statCard}>
-              <span className={styles.statCardLabel}>Disque</span>
-              <span className={styles.statCardValue}>{diskPct != null ? diskPct + '%' : '—'}</span>
-              <span className={styles.statCardSub}>{fmtBytes(stats.disk.used)} / {fmtBytes(stats.disk.total)}</span>
-              {diskPct != null && (
-                <div className={styles.gaugeWrap}>
-                  <div className={styles.gaugeBar}>
-                    <div
-                      className={`${styles.gaugeFill} ${gaugeClass(diskPct)}`}
-                      style={{ width: diskPct + '%' }}
-                    />
-                  </div>
-                  <div className={styles.gaugeMeta}>
-                    <span>Utilisé</span>
-                    <span>{fmtBytes(stats.disk.free)} libre</span>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* CPU */}
-            <div className={styles.statCard}>
-              <span className={styles.statCardLabel}>CPU</span>
-              <span className={styles.statCardValue}>
-                {stats.system.cpu_percent != null ? stats.system.cpu_percent.toFixed(0) + '%' : '—'}
-              </span>
-              <span className={styles.statCardSub}>utilisation</span>
-              {stats.system.cpu_percent != null && (
-                <div className={styles.gaugeWrap}>
-                  <div className={styles.gaugeBar}>
-                    <div
-                      className={`${styles.gaugeFill} ${gaugeClass(stats.system.cpu_percent)}`}
-                      style={{ width: stats.system.cpu_percent + '%' }}
-                    />
-                  </div>
-                </div>
-              )}
-              <div className={styles.statCardRow}>
-                <div className={styles.statCardRowItem}>
-                  <span>Uptime</span>
-                  <span className={styles.statCardRowVal}>{fmtUptime(stats.system.uptime_seconds)}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* RAM */}
-            <div className={styles.statCard}>
-              <span className={styles.statCardLabel}>RAM</span>
-              <span className={styles.statCardValue}>
-                {stats.system.ram_percent != null ? stats.system.ram_percent.toFixed(0) + '%' : '—'}
-              </span>
-              <span className={styles.statCardSub}>{fmtBytes(stats.system.ram_used)} / {fmtBytes(stats.system.ram_total)}</span>
-              {stats.system.ram_percent != null && (
-                <div className={styles.gaugeWrap}>
-                  <div className={styles.gaugeBar}>
-                    <div
-                      className={`${styles.gaugeFill} ${gaugeClass(stats.system.ram_percent)}`}
-                      style={{ width: stats.system.ram_percent + '%' }}
-                    />
-                  </div>
-                  <div className={styles.gaugeMeta}>
-                    <span>Utilisé</span>
-                    <span>{fmtBytes(stats.system.ram_total - stats.system.ram_used)} libre</span>
-                  </div>
-                </div>
-              )}
-            </div>
-
           </div>
 
-          {/* ── Vidéos récentes ── */}
-          <div className={styles.recentSection}>
-            <p className={styles.recentTitle}>Dernières vidéos ingérées</p>
-            {stats.recent_videos.length === 0 ? (
-              <p className={styles.empty}>Aucune vidéo.</p>
-            ) : (
-              <table className={styles.recentTable}>
-                <thead>
-                  <tr>
-                    <th>Fichier</th>
-                    <th>Taille</th>
-                    <th>Propriétaire</th>
-                    <th>Horodatage caméra</th>
-                    <th>Statut</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {stats.recent_videos.map(v => (
-                    <tr key={v.id}>
-                      <td><span className={styles.recentFileName}>{v.file_name}</span></td>
-                      <td>{fmtBytes(v.file_size_bytes)}</td>
-                      <td>{v.owner ?? '—'}</td>
-                      <td>{fmtDate(v.camera_timestamp)}</td>
-                      <td>
-                        <span className={v.matching_status === 'MATCHED' ? styles.badgeOk : styles.badgeErr}>
-                          {v.matching_status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {/* Vidéos */}
+          <div className={styles.statCard}>
+            <span className={styles.statCardLabel}>Vidéos</span>
+            <span className={styles.statCardValue}>{stats.videos.total}</span>
+            <span className={styles.statCardSub}>{fmtBytes(stats.videos.total_size_bytes)} au total</span>
+            <div className={styles.statCardRow}>
+              <div className={styles.statCardRowItem}>
+                <span>Associées</span>
+                <span className={styles.statCardRowVal}>{stats.videos.matched}</span>
+              </div>
+              <div className={styles.statCardRowItem}>
+                <span>Non associées</span>
+                <span className={styles.statCardRowVal}>{stats.videos.unmatched + stats.videos.ambiguous}</span>
+              </div>
+              <div className={styles.statCardRowItem}>
+                <span>Manuelles</span>
+                <span className={styles.statCardRowVal}>{stats.videos.manual}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Rotations */}
+          <div className={styles.statCard}>
+            <span className={styles.statCardLabel}>Rotations</span>
+            <span className={styles.statCardValue}>{stats.rots.total}</span>
+            <span className={styles.statCardSub}>au total</span>
+            <div className={styles.statCardRow}>
+              <div className={styles.statCardRowItem}>
+                <span>Aujourd'hui</span>
+                <span className={styles.statCardRowVal}>{stats.rots.today}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Disque */}
+          <div className={styles.statCard}>
+            <span className={styles.statCardLabel}>Disque</span>
+            <span className={styles.statCardValue}>{diskPct != null ? diskPct + '%' : '—'}</span>
+            <span className={styles.statCardSub}>{fmtBytes(stats.disk.used)} / {fmtBytes(stats.disk.total)}</span>
+            {diskPct != null && (
+              <div className={styles.gaugeWrap}>
+                <div className={styles.gaugeBar}>
+                  <div className={`${styles.gaugeFill} ${gaugeClass(diskPct)}`} style={{ width: diskPct + '%' }} />
+                </div>
+                <div className={styles.gaugeMeta}>
+                  <span>Utilisé</span>
+                  <span>{fmtBytes(stats.disk.free)} libre</span>
+                </div>
+              </div>
             )}
           </div>
-        </>
+
+          {/* CPU */}
+          <div className={styles.statCard}>
+            <span className={styles.statCardLabel}>CPU</span>
+            <span className={styles.statCardValue}>
+              {stats.system.cpu_percent != null ? stats.system.cpu_percent.toFixed(0) + '%' : '—'}
+            </span>
+            <span className={styles.statCardSub}>utilisation</span>
+            {stats.system.cpu_percent != null && (
+              <div className={styles.gaugeWrap}>
+                <div className={styles.gaugeBar}>
+                  <div className={`${styles.gaugeFill} ${gaugeClass(stats.system.cpu_percent)}`} style={{ width: stats.system.cpu_percent + '%' }} />
+                </div>
+              </div>
+            )}
+            <div className={styles.statCardRow}>
+              <div className={styles.statCardRowItem}>
+                <span>Uptime</span>
+                <span className={styles.statCardRowVal}>{fmtUptime(stats.system.uptime_seconds)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* RAM */}
+          <div className={styles.statCard}>
+            <span className={styles.statCardLabel}>RAM</span>
+            <span className={styles.statCardValue}>
+              {stats.system.ram_percent != null ? stats.system.ram_percent.toFixed(0) + '%' : '—'}
+            </span>
+            <span className={styles.statCardSub}>{fmtBytes(stats.system.ram_used)} / {fmtBytes(stats.system.ram_total)}</span>
+            {stats.system.ram_percent != null && (
+              <div className={styles.gaugeWrap}>
+                <div className={styles.gaugeBar}>
+                  <div className={`${styles.gaugeFill} ${gaugeClass(stats.system.ram_percent)}`} style={{ width: stats.system.ram_percent + '%' }} />
+                </div>
+                <div className={styles.gaugeMeta}>
+                  <span>Utilisé</span>
+                  <span>{fmtBytes(stats.system.ram_total - stats.system.ram_used)} libre</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+        </div>
       )}
+
+      {/* ── Logs backend ── */}
+      <div className={styles.recentSection}>
+        <p className={styles.recentTitle}>Logs backend</p>
+        {loadingLogs && !logs ? (
+          <p className={styles.empty}>Chargement…</p>
+        ) : logs && logs.length === 0 ? (
+          <p className={styles.empty}>Aucun log disponible (les logs s'accumulent depuis le démarrage du serveur).</p>
+        ) : logs ? (
+          <div className={styles.logPanel}>
+            {logs.map((entry, i) => (
+              <div key={i} className={styles.logLine}>
+                <span className={styles.logTs}>{fmtTs(entry.ts)}</span>
+                <span className={`${styles.logLevel} ${logLevelClass(entry.level)}`}>{entry.level}</span>
+                <span className={styles.logLogger}>{entry.logger.split('.').pop()}</span>
+                <span className={styles.logMsg}>{entry.message}</span>
+              </div>
+            ))}
+            <div ref={logsEndRef} />
+          </div>
+        ) : null}
+      </div>
     </div>
   )
 }
