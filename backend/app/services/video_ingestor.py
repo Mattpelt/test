@@ -256,12 +256,19 @@ def ingest_device(device_node: str, serial: str, db: Session) -> None:
         except subprocess.CalledProcessError as e:
             os.rmdir(mount_point)
             # Périphérique déjà monté par l'hôte (udisks2, automonteur…) ?
-            findmnt = subprocess.run(
-                ["findmnt", "-n", "-o", "TARGET", device_node],
-                capture_output=True, text=True,
-            )
-            if findmnt.returncode == 0 and findmnt.stdout.strip():
-                mount_point = findmnt.stdout.strip()
+            # /proc/mounts est visible depuis le container via la propagation de namespace.
+            existing = None
+            try:
+                with open("/proc/mounts") as f:
+                    for line in f:
+                        parts = line.split()
+                        if len(parts) >= 2 and parts[0] == device_node:
+                            existing = parts[1]
+                            break
+            except OSError:
+                pass
+            if existing:
+                mount_point = existing
                 own_mount = False
                 logger.info(f"Périphérique déjà monté par l'hôte : {mount_point}")
             else:
