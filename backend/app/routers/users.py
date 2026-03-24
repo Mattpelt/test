@@ -4,7 +4,7 @@ import os
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.auth import create_access_token, pin_to_lookup_hash, require_admin
+from app.auth import create_access_token, hash_password, pin_to_lookup_hash, require_admin
 from app.database import get_db
 from app.models.camera import Camera
 from app.models.rot_participant import RotParticipant
@@ -13,45 +13,24 @@ from app.models.video import Video
 from app.auth import get_current_user
 from app.schemas.user import OnboardingRequest, UserCreate, UserResponse, UserSelfUpdate, UserUpdate, UserUpdateCameras
 
+
 router = APIRouter(prefix="/users", tags=["Utilisateurs"])
 logger = logging.getLogger(__name__)
 
 
-def _validate_pin(pin: str, is_admin: bool) -> None:
-    """Valide le format du PIN : 4 chiffres pour sautant, 6 pour admin."""
-    expected = 6 if is_admin else 4
-    if not pin.isdigit() or len(pin) != expected:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Le PIN doit contenir exactement {expected} chiffres.",
-        )
-
-
-def _pin_unique(pin_hash: str, db: Session, exclude_id: int | None = None) -> None:
-    """Vérifie que le PIN n'est pas déjà utilisé."""
-    q = db.query(User).filter(User.pin_lookup_hash == pin_hash)
-    if exclude_id:
-        q = q.filter(User.id != exclude_id)
-    if q.first():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Ce PIN est déjà utilisé par un autre compte.",
-        )
-
-
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def create_user(payload: UserCreate, db: Session = Depends(get_db), _: User = Depends(require_admin)):
-    """Crée un compte sautant (réservé à l'admin)."""
-    _validate_pin(payload.pin, payload.is_admin)
-    if payload.email and db.query(User).filter(User.email == payload.email).first():
+    """Crée un compte utilisateur (réservé à l'admin)."""
+    email = payload.email.lower().strip()
+    if db.query(User).filter(User.email == email).first():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email déjà utilisé.")
-    lookup = pin_to_lookup_hash(payload.pin)
-    _pin_unique(lookup, db)
+    if len(payload.password) < 8:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Le mot de passe doit contenir au moins 8 caractères.")
     user = User(
         first_name=payload.first_name,
         last_name=payload.last_name,
-        email=payload.email or None,
-        pin_lookup_hash=lookup,
+        email=email,
+        password_hash=hash_password(payload.password),
         afifly_name=payload.afifly_name or None,
         camera_serials=[],
         is_admin=payload.is_admin,
@@ -61,6 +40,26 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db), _: User = De
     db.refresh(user)
     logger.info(f"[USERS] Compte créé par admin : {user.first_name} {user.last_name} (id={user.id})")
     return user
+
+
+def _validate_pin(pin: str, is_admin: bool) -> None:
+    expected = 6 if is_admin else 4
+    if not pin.isdigit() or len(pin) != expected:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Le PIN doit contenir exactement {expected} chiffres.",
+        )
+
+
+def _pin_unique(pin_hash: str, db: Session, exclude_id: int | None = None) -> None:
+    q = db.query(User).filter(User.pin_lookup_hash == pin_hash)
+    if exclude_id:
+        q = q.filter(User.id != exclude_id)
+    if q.first():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ce PIN est déjà utilisé par un autre compte.",
+        )
 
 
 @router.post("/onboard", response_model=dict, status_code=status.HTTP_201_CREATED)
@@ -160,11 +159,10 @@ def update_me(payload: UserSelfUpdate, db: Session = Depends(get_db), current_us
         current_user.email = payload.email or None
     if payload.afifly_name is not None:
         current_user.afifly_name = payload.afifly_name or None
-    if payload.pin is not None:
-        _validate_pin(payload.pin, current_user.is_admin)
-        lookup = pin_to_lookup_hash(payload.pin)
-        _pin_unique(lookup, db, exclude_id=current_user.id)
-        current_user.pin_lookup_hash = lookup
+    if payload.password is not None:
+        if len(payload.password) < 8:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Le mot de passe doit contenir au moins 8 caractères.")
+        current_user.password_hash = hash_password(payload.password)
     if payload.notifications_enabled is not None:
         current_user.notifications_enabled = payload.notifications_enabled
     db.commit()
@@ -292,12 +290,10 @@ def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(get_db)
         user.is_active = payload.is_active
     if payload.is_admin is not None:
         user.is_admin = payload.is_admin
-    if payload.pin is not None:
-        effective_admin = payload.is_admin if payload.is_admin is not None else user.is_admin
-        _validate_pin(payload.pin, effective_admin)
-        lookup = pin_to_lookup_hash(payload.pin)
-        _pin_unique(lookup, db, exclude_id=user_id)
-        user.pin_lookup_hash = lookup
+    if payload.password is not None:
+        if len(payload.password) < 8:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Le mot de passe doit contenir au moins 8 caractères.")
+        user.password_hash = hash_password(payload.password)
     if payload.notifications_enabled is not None:
         user.notifications_enabled = payload.notifications_enabled
     db.commit()

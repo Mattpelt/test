@@ -49,8 +49,8 @@ function ProfileForm({ profile, onSaved }) {
     last_name:             profile.last_name,
     email:                 profile.email ?? '',
     afifly_name:           profile.afifly_name ?? '',
-    pin:                   '',
-    pinConfirm:            '',
+    password:              '',
+    passwordConfirm:       '',
     notifications_enabled: profile.notifications_enabled ?? true,
   })
   const [saving, setSaving] = useState(false)
@@ -65,14 +65,13 @@ function ProfileForm({ profile, onSaved }) {
     e.preventDefault()
     setError(''); setSaved(false)
 
-    if (form.pin) {
-      const pinLen = profile.is_admin ? 6 : 4
-      if (!/^\d+$/.test(form.pin) || form.pin.length !== pinLen) {
-        setError(`Le nouveau PIN doit contenir exactement ${pinLen} chiffres.`)
+    if (form.password) {
+      if (form.password.length < 8) {
+        setError('Le mot de passe doit contenir au moins 8 caractères.')
         return
       }
-      if (form.pin !== form.pinConfirm) {
-        setError('Les deux PIN ne correspondent pas.')
+      if (form.password !== form.passwordConfirm) {
+        setError('Les deux mots de passe ne correspondent pas.')
         return
       }
     }
@@ -86,10 +85,10 @@ function ProfileForm({ profile, onSaved }) {
         afifly_name:           form.afifly_name || null,
         notifications_enabled: form.notifications_enabled,
       }
-      if (form.pin) payload.pin = form.pin
+      if (form.password) payload.password = form.password
       await api.patch('/users/me', payload)
       setSaved(true)
-      setForm(f => ({ ...f, pin: '', pinConfirm: '' }))
+      setForm(f => ({ ...f, password: '', passwordConfirm: '' }))
       setTimeout(() => setSaved(false), 3000)
       onSaved()
     } catch (err) {
@@ -98,8 +97,6 @@ function ProfileForm({ profile, onSaved }) {
       setSaving(false)
     }
   }
-
-  const pinLen = profile.is_admin ? 6 : 4
 
   return (
     <section className={pStyles.card}>
@@ -135,32 +132,26 @@ function ProfileForm({ profile, onSaved }) {
         </div>
 
         <div className={pStyles.divider} />
-        <div className={pStyles.sectionLabel}>Changer le PIN <span className={pStyles.optional}>(laisser vide pour conserver l'actuel)</span></div>
+        <div className={pStyles.sectionLabel}>Changer le mot de passe <span className={pStyles.optional}>(laisser vide pour conserver l'actuel)</span></div>
 
         <div className={pStyles.grid2}>
           <div className={pStyles.field}>
-            <label className={pStyles.label}>Nouveau PIN <span className={pStyles.hint}>{pinLen} chiffres</span></label>
+            <label className={pStyles.label}>Nouveau mot de passe <span className={pStyles.hint}>8 caractères min.</span></label>
             <input
               className={pStyles.input}
               type="password"
-              inputMode="numeric"
-              maxLength={pinLen}
-              value={form.pin}
-              onChange={set('pin')}
-              placeholder={'•'.repeat(pinLen)}
+              value={form.password}
+              onChange={set('password')}
               autoComplete="new-password"
             />
           </div>
           <div className={pStyles.field}>
-            <label className={pStyles.label}>Confirmer le PIN</label>
+            <label className={pStyles.label}>Confirmer</label>
             <input
               className={pStyles.input}
               type="password"
-              inputMode="numeric"
-              maxLength={pinLen}
-              value={form.pinConfirm}
-              onChange={set('pinConfirm')}
-              placeholder={'•'.repeat(pinLen)}
+              value={form.passwordConfirm}
+              onChange={set('passwordConfirm')}
               autoComplete="new-password"
             />
           </div>

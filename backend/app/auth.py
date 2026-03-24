@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
+from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -13,11 +14,22 @@ from app.models.user import User
 
 SECRET_KEY = os.getenv("SECRET_KEY", "change-me-in-production")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_HOURS = 24 * 7  # 7 jours
+ACCESS_TOKEN_EXPIRE_HOURS = 24 * 30  # 30 jours
+
+
+_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def hash_password(password: str) -> str:
+    return _pwd_context.hash(password)
+
+
+def verify_password(plain: str, hashed: str) -> bool:
+    return _pwd_context.verify(plain, hashed)
 
 
 def pin_to_lookup_hash(pin: str) -> str:
-    """Transforme un PIN en HMAC-SHA256 pour stockage et recherche en base."""
+    """Conservé pour usage futur (pupitre). Transforme un PIN en HMAC-SHA256."""
     return hmac.new(SECRET_KEY.encode(), pin.encode(), hashlib.sha256).hexdigest()
 
 security = HTTPBearer()

@@ -3,23 +3,23 @@ from pydantic import BaseModel
 
 
 class UserCreate(BaseModel):
-    """Création d'un compte par l'admin. PIN : 4 chiffres (sautant) ou 6 chiffres (admin)."""
+    """Création d'un compte par l'admin."""
     first_name:  str
     last_name:   str
-    email:       str | None = None
-    pin:         str
+    email:       str
+    password:    str
     afifly_name: str | None = None
     is_admin:    bool = False
 
 
 class OnboardingRequest(BaseModel):
-    """Création de compte en self-service depuis le kiosque."""
+    """Réservé au pupitre — désactivé côté mobile."""
     first_name:      str
     last_name:       str
     email:           str | None = None
     afifly_name:     str | None = None
-    pin:             str                    # exactement 4 chiffres
-    camera_serials:  list[str] = []         # serials sélectionnés par l'utilisateur
+    pin:             str
+    camera_serials:  list[str] = []
 
 
 class UserSelfUpdate(BaseModel):
@@ -28,7 +28,7 @@ class UserSelfUpdate(BaseModel):
     last_name:              str | None = None
     email:                  str | None = None
     afifly_name:            str | None = None
-    pin:                    str | None = None   # nouveau PIN (optionnel)
+    password:               str | None = None   # nouveau mot de passe (optionnel)
     notifications_enabled:  bool | None = None
 
 
@@ -38,7 +38,7 @@ class UserUpdate(BaseModel):
     last_name:             str | None = None
     email:                 str | None = None
     afifly_name:           str | None = None
-    pin:                   str | None = None
+    password:              str | None = None
     camera_serials:        list[str] | None = None
     is_admin:              bool | None = None
     is_active:             bool | None = None
@@ -51,7 +51,7 @@ class UserUpdateCameras(BaseModel):
 
 
 class UserResponse(BaseModel):
-    """Données retournées par l'API (le PIN n'est jamais exposé)."""
+    """Données retournées par l'API (le mot de passe n'est jamais exposé)."""
     id:                    int
     first_name:            str
     last_name:             str
