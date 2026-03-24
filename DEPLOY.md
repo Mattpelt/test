@@ -214,41 +214,79 @@ Cette étape permet au PC de détecter une caméra branchée en USB et de lancer
 
 Le script `setup.sh` configure cette étape automatiquement. En cas d'installation manuelle :
 
-### Script MTP/PTP (GoPro, Insta360, Sony…)
+### Script MTP/PTP (GoPro, Insta360 MTP, Sony…)
 
 ```bash
 sudo tee /usr/local/bin/skydive-camera.sh > /dev/null <<'EOF'
 #!/bin/bash
 LOG=/tmp/skydive-camera.log
-echo "[$(date)] udev MTP: serial=$ID_SERIAL_SHORT vendor=$ID_VENDOR_ID" >> "$LOG"
+MODEL_CLEAN=$(echo "$ID_MODEL" | tr '_' ' ')
+echo "[$(date)] udev MTP trigger: serial=$ID_SERIAL_SHORT vendor=$ID_VENDOR_ID model=$MODEL_CLEAN" >> "$LOG"
 /usr/bin/systemd-run --no-block \
   /usr/bin/curl -s -X POST http://127.0.0.1:8000/internal/camera-connected \
   -H "Content-Type: application/json" \
-  -d "{\"serial\": \"$ID_SERIAL_SHORT\", \"mtp\": true, \"vendor_id\": \"$ID_VENDOR_ID\"}" >> "$LOG" 2>&1
+  -d "{\"serial\": \"$ID_SERIAL_SHORT\", \"mtp\": true, \"vendor_id\": \"$ID_VENDOR_ID\", \"model_name\": \"$MODEL_CLEAN\"}" >> "$LOG" 2>&1
 EOF
 sudo chmod +x /usr/local/bin/skydive-camera.sh
 ```
 
-### Script USB Mass Storage (Insta360 X5, cartes SD…)
+### Scripts USB Mass Storage (Insta360 en mode stockage, cartes SD…)
+
+L'architecture utilise deux scripts : un trigger léger appelé par udev, et un worker qui attend que l'hôte ait fini de monter le device avant d'appeler le backend.
+
+> **Pourquoi deux scripts ?** udev a un timeout strict. Le worker peut avoir besoin d'attendre jusqu'à 10 secondes que udisks2 monte le device — il est donc exécuté via `systemd-run --no-block`.
 
 ```bash
+# Trigger udev (appelé directement par la règle)
 sudo tee /usr/local/bin/skydive-storage.sh > /dev/null <<'EOF'
 #!/bin/bash
 LOG=/tmp/skydive-camera.log
-echo "[$(date)] udev storage: serial=$ID_SERIAL_SHORT device=$DEVNAME" >> "$LOG"
+echo "[$(date)] udev storage trigger: serial=$ID_SERIAL_SHORT device=$DEVNAME vendor=$ID_VENDOR_ID model=$ID_MODEL" >> "$LOG"
 /usr/bin/systemd-run --no-block \
-  /usr/bin/curl -s -X POST http://127.0.0.1:8000/internal/camera-connected \
-  -H "Content-Type: application/json" \
-  -d "{\"serial\": \"$ID_SERIAL_SHORT\", \"mtp\": false, \"device_node\": \"$DEVNAME\"}" >> "$LOG" 2>&1
+  /usr/local/bin/skydive-storage-worker.sh \
+  "$ID_SERIAL_SHORT" "$DEVNAME" "$ID_VENDOR_ID" "$ID_MODEL"
 EOF
 sudo chmod +x /usr/local/bin/skydive-storage.sh
+
+# Worker (attend le montage, appelle le backend)
+sudo tee /usr/local/bin/skydive-storage-worker.sh > /dev/null <<'EOF'
+#!/bin/bash
+SERIAL="$1"
+DEVNAME="$2"
+VENDOR_ID="$3"
+MODEL=$(echo "$4" | tr '_' ' ')
+LOG=/tmp/skydive-camera.log
+
+# Attendre que udisks2 monte le device (max 10s)
+MOUNT_PATH=""
+for i in $(seq 1 10); do
+    MP=$(lsblk -no MOUNTPOINT "$DEVNAME" 2>/dev/null | grep -v '^[[:space:]]*$' | head -1)
+    if [ -n "$MP" ]; then MOUNT_PATH="$MP"; break; fi
+    sleep 1
+done
+
+if [ -n "$MOUNT_PATH" ]; then
+    echo "[$(date)] Monté : $DEVNAME → $MOUNT_PATH" >> "$LOG"
+    DEVICE_PARAM="$MOUNT_PATH"
+else
+    echo "[$(date)] Non monté après 10s, fallback: $DEVNAME" >> "$LOG"
+    DEVICE_PARAM="$DEVNAME"
+fi
+
+/usr/bin/curl -s -X POST http://127.0.0.1:8000/internal/camera-connected \
+    -H "Content-Type: application/json" \
+    -d "{\"serial\": \"$SERIAL\", \"mtp\": false, \"device_node\": \"$DEVICE_PARAM\", \"vendor_id\": \"$VENDOR_ID\", \"model_name\": \"$MODEL\"}" >> "$LOG" 2>&1
+EOF
+sudo chmod +x /usr/local/bin/skydive-storage-worker.sh
 ```
+
+> **Note Insta360 Mass Storage** : ces caméras exposent le serial USB générique `0001`. Le vrai serial unique est extrait automatiquement des métadonnées `.insv` lors de la première ingestion, et le compte utilisateur est mis à jour. Après la première ingestion réussie, chaque caméra est reconnue par son vrai serial.
 
 ### Règle udev
 
 ```bash
 sudo tee /etc/udev/rules.d/99-skydive-camera.rules > /dev/null <<'EOF'
-# Caméras MTP/PTP (GoPro, Sony, etc.)
+# Caméras MTP/PTP (GoPro via gphoto2, Sony, etc.)
 ACTION=="bind", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ENV{ID_GPHOTO2}=="1", RUN+="/usr/local/bin/skydive-camera.sh"
 # Caméras USB Mass Storage (Insta360, cartes SD)
 ACTION=="add", SUBSYSTEM=="block", ENV{ID_BUS}=="usb", ENV{DEVTYPE}=="partition", RUN+="/usr/local/bin/skydive-storage.sh"
@@ -426,33 +464,48 @@ skydivemediahub/
 │   │   ├── main.py               # Point d'entrée FastAPI + migrations + scheduler
 │   │   ├── auth.py               # JWT : login, middleware, get_current_user
 │   │   ├── database.py           # Connexion PostgreSQL / SQLAlchemy
-│   │   ├── models/               # Tables : users, rots, rot_participants, videos, settings
-│   │   ├── routers/              # Endpoints : auth, users, rots, videos, internal, settings
-│   │   └── services/             # Logique métier
+│   │   ├── camera_state.py       # Store in-memory thread-safe (état kiosque temps réel)
+│   │   ├── log_buffer.py         # Buffer circulaire des logs backend (500 entrées)
+│   │   ├── models/               # Tables : users, rots, rot_participants, videos, settings, cameras
+│   │   ├── routers/              # Endpoints API
+│   │   │   ├── auth.py
+│   │   │   ├── users.py
+│   │   │   ├── rots.py
+│   │   │   ├── videos.py
+│   │   │   ├── internal.py       # Déclencheur udev + onboarding caméras inconnues
+│   │   │   ├── settings.py
+│   │   │   ├── admin_stats.py    # Dashboard monitoring admin
+│   │   │   └── cameras.py        # GET /cameras/live (public — kiosque)
+│   │   └── services/
 │   │       ├── pdf_parser.py     # Parsing PDF Afifly (pdfplumber)
 │   │       ├── video_ingestor.py # Ingestion caméra (GoPro HTTP / MTP / block)
 │   │       ├── matcher.py        # Matching vidéo ↔ rot par horodatage
 │   │       ├── rot_service.py    # Création / upsert des rots en base
 │   │       ├── retention.py      # Nettoyage des vidéos expirées (03:00)
 │   │       ├── notifier.py       # Notifications email (smtplib STARTTLS)
-│   │       └── usb_watcher.py    # Surveillance USB via pyudev
+│   │       └── usb_watcher.py    # Surveillance USB via pyudev (fallback interne)
 │   ├── Dockerfile
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/
 │   │   ├── main.jsx              # Point d'entrée React
-│   │   ├── App.jsx               # Routage (React Router)
+│   │   ├── App.jsx               # Routage (React Router) — /login, /kiosk, /
 │   │   ├── api/client.js         # Instance Axios + intercepteur JWT
 │   │   ├── context/AuthContext.jsx
+│   │   ├── components/
+│   │   │   ├── GestionTab.jsx    # Sous-onglets admin (exports nommés)
+│   │   │   └── ProfileTab.jsx
 │   │   └── pages/
-│   │       ├── LoginPage.jsx
-│   │       ├── HomePage.jsx      # Vue sautant
-│   │       └── AdminPage.jsx     # Dashboard admin
+│   │       ├── LoginPage.jsx     # Connexion + lien "Mode kiosque"
+│   │       ├── HomePage.jsx      # Vue principale (onglets : Mes vidéos, Mon compte,
+│   │       │                     #   Dashboard, Paramètres serveur, Utilisateurs,
+│   │       │                     #   Rotations, Vidéos — les 5 derniers admin only)
+│   │       └── KioskPage.jsx     # Page publique /kiosk — suivi ingestion temps réel
 │   ├── nginx.conf                # Proxy /api/ + X-Accel-Redirect
 │   └── Dockerfile                # Build multi-stage Node 20 → nginx
 ├── n8n/
 │   └── workflows/
-│       └── gmail_pdf_afifly.json # Workflow à importer manuellement dans n8n
+│       └── gmail_pdf_afifly.json
 ├── docker-compose.yml
 ├── setup.sh                      # Script d'installation automatique
 ├── .env                          # Configuration locale (jamais committé)
@@ -479,3 +532,6 @@ skydivemediahub/
 | GET | `/settings` | admin | Lire la configuration |
 | PATCH | `/settings` | admin | Modifier la configuration (dont SMTP) |
 | POST | `/internal/camera-connected` | public | Déclencheur d'ingestion (udev) |
+| GET | `/admin/stats` | admin | Métriques système (CPU, RAM, disque, vidéos, users) |
+| GET | `/admin/logs` | admin | Logs backend en temps réel (buffer 500 entrées) |
+| GET | `/cameras/live` | **public** | État temps réel des caméras en cours d'ingestion (kiosque) |

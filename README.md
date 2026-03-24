@@ -35,6 +35,12 @@ v0.6 — Ajout architecture Docker (Compose + conteneur
 v0.7 — État d'avancement session 2 : parser PDF validé,
         ingestion USB/MTP en cours, détail architecture
         détection caméra, API GoPro HTTP confirmée
+v0.8 — Dashboard monitoring admin (CPU/RAM/disque/logs),
+        navigation à onglets plats, mode kiosque public
+        (/kiosk) avec suivi temps réel des ingestions,
+        architecture udev Mass Storage refactorisée
+        (trigger + worker, attente montage udisks2),
+        vendor_id et model transmis au backend
 
 
 --------------------------------------------------------
@@ -277,8 +283,12 @@ PO-7  ✓ Ingestion GoPro via HTTP (Open GoPro API) — VALIDÉ
         via l'API (pas les fichiers copiés manuellement sur la SD).
 
 PO-8  ✓ Règle udev sur l'hôte Ubuntu — VALIDÉ
-        Scripts skydive-camera.sh + skydive-storage.sh configurés
-        via setup.sh. Détection automatique MTP + Mass Storage.
+        3 scripts configurés via setup.sh :
+          skydive-camera.sh    — trigger MTP (GoPro, Sony...)
+          skydive-storage.sh   — trigger Mass Storage (udev → worker)
+          skydive-storage-worker.sh — attend le montage udisks2
+                                      (max 10s), puis appelle le backend
+        Vendor ID + model transmis au backend pour identification.
 
 PO-9  ✓ Ingestion gphoto2 (MTP) — VALIDÉ sur bare-metal
         ingest_mtp_device() fonctionnel.
@@ -305,10 +315,15 @@ PO-13 ✓ Nettoyage rétention automatique (F22) — VALIDÉ
 
 PO-14 ✓ Frontend — VALIDÉ
         React 18 + Vite + React Router, servi par nginx (port 80).
-        Authentification JWT (7 jours). Pages :
-          - /login     — connexion email / mot de passe
-          - /          — vue sautant : vidéos par rot, téléchargement
-          - /admin     — gestion sautants, rotations, paramètres
+        Authentification JWT (7 jours). Routes :
+          - /login  — connexion + lien "Mode kiosque"
+          - /kiosk  — page publique, suivi ingestion temps réel
+                      (1 card par caméra, nom proprio, progression
+                       byte-level avec %, vitesse transfert, rot)
+          - /       — vue principale avec onglets :
+              Mes vidéos, Mon compte (tous les utilisateurs)
+              Dashboard, Paramètres serveur, Utilisateurs,
+              Rotations, Vidéos (admin uniquement)
         Accessible depuis : http://192.168.1.39
 
 
@@ -533,11 +548,17 @@ SOLUTION RETENUE :
     ACTION=="bind", SUBSYSTEM=="usb", ENV{ID_GPHOTO2}=="1", \
     RUN+="/usr/local/bin/skydive-camera.sh"
 
-  Script /usr/local/bin/skydive-camera.sh :
-    #!/bin/bash
-    curl -s -X POST http://localhost:8000/internal/camera-connected \
-      -H "Content-Type: application/json" \
-      -d "{\"serial\": \"$ID_SERIAL_SHORT\", \"mtp\": true}"
+  Trois scripts sur l'hôte (configurés par setup.sh) :
+    /usr/local/bin/skydive-camera.sh        — trigger MTP/PTP
+    /usr/local/bin/skydive-storage.sh       — trigger Mass Storage
+    /usr/local/bin/skydive-storage-worker.sh — worker : attend
+      que udisks2 monte le device (lsblk, max 10s), passe le chemin
+      de montage au backend. Évite les conflits de montage entre
+      l'hôte et le container Docker.
+
+  Les scripts transmettent vendor_id et model_name pour affichage
+  dans le kiosque. Le backend enrichit ces infos depuis la table
+  cameras si une ingestion précédente a détecté le modèle exact.
 
 DEUX PATHS D'INGESTION :
 
@@ -686,18 +707,27 @@ Auth     : JWT stocké en localStorage (7 jours)
 Serveur  : nginx (port 80) — build multi-stage dans frontend/
 
 ROUTES :
-  /login   → LoginPage  (public)
-  /        → HomePage   (sautant — JWT requis)
-  /admin   → AdminPage  (admin uniquement — JWT + is_admin requis)
+  /login   → LoginPage  (public) + lien "Mode kiosque"
+  /kiosk   → KioskPage  (public) — suivi ingestion temps réel
+  /        → HomePage   (JWT requis) — onglets selon rôle
 
 PAGES :
-  LoginPage  — formulaire email/mot de passe, redirect /admin si is_admin
-  HomePage   — liste des rots du sautant, membres du groupe,
-               vidéos par membre avec bouton téléchargement
-  AdminPage  — 3 onglets :
-    · Sautants   : liste + création + désactivation
-    · Rotations  : liste de tous les rots parsés
-    · Paramètres : matching, rétention, SMTP notifications
+  LoginPage — formulaire email/mot de passe
+  KioskPage — page plein écran sombre, polling /cameras/live
+              toutes les secondes, 1 card par caméra connectée :
+                · Nom propriétaire (très grand, lisible de loin)
+                · Anneau SVG de progression (% byte-level)
+                · Vitesse de transfert (Mo/s)
+                · Barre de progression fichiers (X/N)
+                · Chips rotations matchées
+                · Animations selon statut (spinner, checkmark, erreur)
+  HomePage  — onglets pour tous : Mes vidéos, Mon compte
+              onglets admin uniquement :
+                · Dashboard   : métriques CPU/RAM/disque + logs backend
+                · Paramètres serveur : matching, rétention, SMTP
+                · Utilisateurs : liste + création + désactivation
+                · Rotations : liste de tous les rots parsés
+                · Vidéos : toutes les vidéos avec filtres
 
 NGINX CONFIG (frontend/nginx.conf) :
   location /api/              → proxy_pass http://backend:8000/
