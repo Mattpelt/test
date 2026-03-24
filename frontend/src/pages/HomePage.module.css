@@ -120,6 +120,22 @@
 .logoutBtn:hover { border-color: var(--color-muted); color: var(--color-text); }
 .logoutBtn:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 
+.layoutToggleBtn {
+  background: none;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  color: var(--color-muted);
+  cursor: pointer;
+  padding: 0.35rem 0.45rem;
+  display: flex;
+  align-items: center;
+  line-height: 0;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.layoutToggleBtn:hover { border-color: var(--color-muted); color: var(--color-text); }
+.layoutToggleBtn:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+
 /* ── Tabs ── */
 .tabs {
   background: var(--color-surface);
@@ -700,6 +716,7 @@
   display: flex;
   gap: 0.4rem;
   margin-top: 0.2rem;
+  justify-content: center;
 }
 
 .previewBtn {
@@ -1110,3 +1127,213 @@
 
 .removeParticipantBtn:hover { color: var(--color-danger); }
 .removeParticipantBtn:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+
+/* ═══════════════════════════════════════════════════
+   MOBILE — vue par rotation (carousel)
+   Breakpoint : ≤ 640 px (portrait téléphone)
+═══════════════════════════════════════════════════ */
+
+.desktopOnly { display: block; }
+.mobileOnly  { display: none; }
+
+@media (max-width: 640px) {
+  .desktopOnly { display: none !important; }
+  .mobileOnly  { display: block; }
+}
+
+/* ── Card rotation mobile ── */
+.rotCardMobile {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.rotCardHead {
+  padding: 0.75rem 0.875rem 0.6rem;
+}
+
+.rotCardTitleRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 0.15rem;
+}
+
+.rotCardTitle {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.rotCardCount {
+  font-size: 0.7rem;
+  color: var(--color-faint);
+  font-weight: 400;
+  flex-shrink: 0;
+  margin-left: 0.5rem;
+}
+
+.rotCardDate {
+  font-size: 0.75rem;
+  color: var(--color-muted);
+  margin-bottom: 0.55rem;
+}
+
+/* Prénoms des participants */
+.rotCardParticipants {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.6rem;
+}
+
+.participantPill {
+  background: none;
+  border: none;
+  padding: 0.1rem 0;
+  font-size: 0.72rem;
+  font-family: inherit;
+  color: var(--color-text-2);
+  cursor: pointer;
+  transition: color 0.15s, font-weight 0.1s;
+  line-height: 1.4;
+}
+
+.participantPillActive {
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.participantPillGray {
+  color: var(--color-faint);
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* ── Carousel ── */
+.carousel {
+  display: flex;
+  overflow-x: scroll;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  border-top: 1px solid var(--color-border);
+}
+
+.carousel::-webkit-scrollbar { display: none; }
+
+.carouselSlide {
+  flex: 0 0 100%;
+  scroll-snap-align: start;
+  padding: 0.75rem 0.875rem 0.5rem;
+}
+
+.carouselThumbWrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--color-bg);
+  cursor: pointer;
+  margin-bottom: 0.6rem;
+  border: 1px solid var(--color-border);
+}
+
+.carouselThumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: opacity 0.15s;
+}
+
+.carouselThumb:hover { opacity: 0.85; }
+
+.carouselThumbPlaceholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5rem;
+  color: var(--color-dim);
+  cursor: pointer;
+}
+
+.carouselInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.carouselTime {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.carouselMeta {
+  font-size: 0.75rem;
+  color: var(--color-text-2);
+}
+
+.carouselFileName {
+  font-size: 0.68rem;
+  color: var(--color-faint);
+  word-break: break-all;
+}
+
+/* ── Dots ── */
+.carouselDots {
+  display: flex;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.5rem 0 0.25rem;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-border);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s;
+}
+
+.dotActive {
+  background: var(--color-accent-text);
+  transform: scale(1.35);
+}
+
+/* ── Bouton télécharger pleine largeur ── */
+.rotCardActions {
+  padding: 0.5rem 0.875rem 0.875rem;
+}
+
+.downloadBtnFull {
+  width: 100%;
+  padding: 0.7rem;
+  background: var(--color-accent);
+  color: #fff;
+  border: none;
+  border-radius: 7px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  font-family: inherit;
+}
+
+.downloadBtnFull:not(:disabled):hover { opacity: 0.88; }
+.downloadBtnFull:disabled { opacity: 0.5; cursor: default; }
+.downloadBtnFull:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+
+/* ── videoContent gap sur mobile ── */
+@media (max-width: 640px) {
+  .videoContent {
+    gap: 0.75rem;
+  }
+}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, Fragment } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api/client'
 import styles from './HomePage.module.css'
@@ -14,12 +14,40 @@ export default function HomePage() {
     ...(user.is_admin ? ['Gestion', 'Paramètres'] : []),
   ]
   const [tab, setTab] = useState('Mes vidéos')
+  const [layoutMode, setLayoutMode] = useState(() => {
+    const saved = localStorage.getItem('layoutMode')
+    if (saved === 'desktop' || saved === 'mobile') return saved
+    return window.innerWidth <= 640 ? 'mobile' : 'desktop'
+  })
+
+  function toggleLayout() {
+    const next = layoutMode === 'desktop' ? 'mobile' : 'desktop'
+    setLayoutMode(next)
+    localStorage.setItem('layoutMode', next)
+  }
 
   return (
     <div className={styles.page}>
       <header className={styles.header}>
         <span className={styles.headerTitle}>SkyDive Media Hub</span>
         <div className={styles.headerRight}>
+          <button
+            className={styles.layoutToggleBtn}
+            onClick={toggleLayout}
+            title={layoutMode === 'desktop' ? 'Passer en vue mobile' : 'Passer en vue bureau'}
+          >
+            {layoutMode === 'desktop' ? (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="5" y="2" width="14" height="20" rx="2"/>
+                <line x1="12" y1="18" x2="12.01" y2="18"/>
+              </svg>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="3" width="20" height="14" rx="2"/>
+                <path d="M8 21h8M12 17v4"/>
+              </svg>
+            )}
+          </button>
           <span className={styles.userName}>{user.first_name} {user.last_name}</span>
           <button className={styles.logoutBtn} onClick={logout}>Déconnexion</button>
         </div>
@@ -42,7 +70,7 @@ export default function HomePage() {
       )}
 
       <main className={styles.main}>
-        {tab === 'Mes vidéos'  && <MyVideosTab onPreview={setPreviewVideo} />}
+        {tab === 'Mes vidéos'  && <MyVideosTab onPreview={setPreviewVideo} layoutMode={layoutMode} />}
         {tab === 'Mon compte'  && <ProfileTab />}
         {tab === 'Gestion'     && <GestionTab />}
         {tab === 'Paramètres'  && <SettingsTab />}
@@ -54,7 +82,7 @@ export default function HomePage() {
 /* ─────────────────────────────────────────────────
    Onglet Mes vidéos
 ───────────────────────────────────────────────── */
-function MyVideosTab({ onPreview }) {
+function MyVideosTab({ onPreview, layoutMode }) {
   const { user } = useAuth()
   const [rots, setRots] = useState([])
   const [videosByRot, setVideosByRot] = useState({})
@@ -191,48 +219,66 @@ function MyVideosTab({ onPreview }) {
             const rotVideos = videosByRot[rot.id] ?? []
 
             return (
-              <section key={rot.id} className={styles.rotSection}>
-                <div className={styles.rotHeader}>
-                  <h2 className={styles.rotTitle}>
-                    Rot n°{rot.rot_number}
-                    {rot.day_number ? ` — saut n°${rot.day_number}` : ''}
-                  </h2>
-                  <span className={styles.rotMeta}>
-                    {formatDate(rot.rot_date)} · {formatTime(rot.rot_time)}
-                    {rot.plane_registration ? ` · ${rot.plane_registration}` : ''}
-                  </span>
-                </div>
+              <Fragment key={rot.id}>
+                {/* ── Desktop ── */}
+                {layoutMode === 'desktop' && (
+                  <section className={styles.rotSection}>
+                    <div className={styles.rotHeader}>
+                      <h2 className={styles.rotTitle}>
+                        Rot n°{rot.rot_number}
+                        {rot.day_number ? ` — saut n°${rot.day_number}` : ''}
+                      </h2>
+                      <span className={styles.rotMeta}>
+                        {formatDate(rot.rot_date)} · {formatTime(rot.rot_time)}
+                        {rot.plane_registration ? ` · ${rot.plane_registration}` : ''}
+                      </span>
+                    </div>
 
-                <div className={styles.membersGrid}>
-                  {groupMembers.map(member => {
-                    const memberVideos = rotVideos.filter(v => v.owner_id === member.user_id)
-                    return (
-                      <div key={member.id} className={styles.memberCard}>
-                        <div className={styles.memberName}>
-                          {member.afifly_name}
-                          {member.user_id === user.id && <span className={styles.meTag}>moi</span>}
-                        </div>
-                        {member.level && <span className={styles.memberLevel}>{member.level}</span>}
-                        {memberVideos.length === 0 ? (
-                          <p className={styles.noVideo}>Pas de vidéo</p>
-                        ) : (
-                          <ul className={styles.videoList}>
-                            {memberVideos.map(video => (
-                              <VideoCard
-                                key={video.id}
-                                video={video}
-                                onPreview={onPreview}
-                                onDownload={handleDownload}
-                                downloading={downloadingIds.has(video.id)}
-                              />
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              </section>
+                    <div className={styles.membersGrid}>
+                      {groupMembers.map(member => {
+                        const memberVideos = rotVideos.filter(v => v.owner_id === member.user_id)
+                        return (
+                          <div key={member.id} className={styles.memberCard}>
+                            <div className={styles.memberName}>
+                              {member.afifly_name}
+                              {member.user_id === user.id && <span className={styles.meTag}>moi</span>}
+                            </div>
+                            {member.level && <span className={styles.memberLevel}>{member.level}</span>}
+                            {memberVideos.length === 0 ? (
+                              <p className={styles.noVideo}>Pas de vidéo</p>
+                            ) : (
+                              <ul className={styles.videoList}>
+                                {memberVideos.map(video => (
+                                  <VideoCard
+                                    key={video.id}
+                                    video={video}
+                                    onPreview={onPreview}
+                                    onDownload={handleDownload}
+                                    downloading={downloadingIds.has(video.id)}
+                                  />
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </section>
+                )}
+
+                {/* ── Mobile ── */}
+                {layoutMode === 'mobile' && (
+                  <RotCardMobile
+                    rot={rot}
+                    rotVideos={rotVideos}
+                    groupMembers={groupMembers}
+                    currentUserId={user.id}
+                    onPreview={onPreview}
+                    onDownload={handleDownload}
+                    downloadingIds={downloadingIds}
+                  />
+                )}
+              </Fragment>
             )
           })}
         </div>
@@ -300,6 +346,157 @@ function VideoCard({ video, onPreview, onDownload, downloading }) {
         </div>
       </div>
     </li>
+  )
+}
+
+/* ─────────────────────────────────────────────────
+   Carte rotation mobile (carousel)
+───────────────────────────────────────────────── */
+function RotCardMobile({ rot, rotVideos, groupMembers, currentUserId, onPreview, onDownload, downloadingIds }) {
+  const token = localStorage.getItem('token')
+  const scrollRef = useRef(null)
+  const [activeIdx, setActiveIdx] = useState(0)
+
+  // Vidéos du groupe triées par heure caméra
+  const videos = rotVideos
+    .filter(v => groupMembers.some(m => m.user_id === v.owner_id))
+    .sort((a, b) => (a.camera_timestamp ?? '').localeCompare(b.camera_timestamp ?? ''))
+
+  const membersWithVideo = new Set(videos.map(v => v.owner_id))
+  const currentVideo = videos[activeIdx] ?? null
+
+  function getFirstName(name) {
+    if (!name) return ''
+    const parts = name.split(' ')
+    return parts.length > 1 ? parts.slice(1).join(' ') : name
+  }
+
+  function formatDate(dateStr) {
+    return new Date(dateStr + 'T00:00:00').toLocaleDateString('fr-FR', {
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+    })
+  }
+
+  function formatSize(bytes) {
+    if (!bytes) return ''
+    if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} Go`
+    return `${(bytes / 1e6).toFixed(0)} Mo`
+  }
+
+  function formatVideoTime(isoStr) {
+    if (!isoStr) return ''
+    return new Date(isoStr).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+  }
+
+  function handleScroll() {
+    const el = scrollRef.current
+    if (!el || el.offsetWidth === 0) return
+    const idx = Math.round(el.scrollLeft / el.offsetWidth)
+    setActiveIdx(Math.min(Math.max(idx, 0), videos.length - 1))
+  }
+
+  function scrollToVideo(idx) {
+    const el = scrollRef.current
+    if (!el) return
+    el.scrollTo({ left: idx * el.offsetWidth, behavior: 'smooth' })
+  }
+
+  function goToMember(userId) {
+    const idx = videos.findIndex(v => v.owner_id === userId)
+    if (idx >= 0) scrollToVideo(idx)
+  }
+
+  return (
+    <div className={styles.rotCardMobile}>
+      {/* ── Header ── */}
+      <div className={styles.rotCardHead}>
+        <div className={styles.rotCardTitleRow}>
+          <span className={styles.rotCardTitle}>
+            Rot n°{rot.rot_number}
+            {rot.day_number ? ` — saut n°${rot.day_number}` : ''}
+          </span>
+          <span className={styles.rotCardCount}>{videos.length} vid</span>
+        </div>
+        <div className={styles.rotCardDate}>
+          {formatDate(rot.rot_date)}
+          {rot.rot_time ? ` · ${rot.rot_time.slice(0, 5)}` : ''}
+          {rot.plane_registration ? ` · ${rot.plane_registration}` : ''}
+        </div>
+        <div className={styles.rotCardParticipants}>
+          {groupMembers.map(m => {
+            const hasVideo = membersWithVideo.has(m.user_id)
+            const isActive = currentVideo?.owner_id === m.user_id
+            return (
+              <button
+                key={m.id}
+                className={[
+                  styles.participantPill,
+                  isActive ? styles.participantPillActive : '',
+                  !hasVideo ? styles.participantPillGray : '',
+                ].filter(Boolean).join(' ')}
+                onClick={() => hasVideo && goToMember(m.user_id)}
+                disabled={!hasVideo}
+              >
+                {getFirstName(m.afifly_name)}{m.user_id === currentUserId ? ' · moi' : ''}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* ── Carousel (masqué si aucune vidéo) ── */}
+      {videos.length > 0 && (
+        <>
+          <div className={styles.carousel} ref={scrollRef} onScroll={handleScroll}>
+            {videos.map(video => (
+              <div key={video.id} className={styles.carouselSlide}>
+                <div className={styles.carouselThumbWrap} onClick={() => onPreview(video)}>
+                  {video.thumbnail_path ? (
+                    <img
+                      src={`/api/videos/${video.id}/thumbnail?token=${encodeURIComponent(token)}`}
+                      className={styles.carouselThumb}
+                      alt=""
+                    />
+                  ) : (
+                    <div className={styles.carouselThumbPlaceholder}>▶</div>
+                  )}
+                </div>
+                <div className={styles.carouselInfo}>
+                  <span className={styles.carouselTime}>{formatVideoTime(video.camera_timestamp)}</span>
+                  <span className={styles.carouselMeta}>
+                    {video.file_format}{video.file_size_bytes ? ` · ${formatSize(video.file_size_bytes)}` : ''}
+                  </span>
+                  <span className={styles.carouselFileName}>{video.file_name}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {videos.length > 1 && (
+            <div className={styles.carouselDots}>
+              {videos.map((_, idx) => (
+                <button
+                  key={idx}
+                  className={`${styles.dot} ${idx === activeIdx ? styles.dotActive : ''}`}
+                  onClick={() => scrollToVideo(idx)}
+                  aria-label={`Vidéo ${idx + 1}`}
+                />
+              ))}
+            </div>
+          )}
+
+          <div className={styles.rotCardActions}>
+            <button
+              className={styles.downloadBtnFull}
+              onClick={() => currentVideo && onDownload(currentVideo.id, currentVideo.file_name)}
+              disabled={!currentVideo || downloadingIds.has(currentVideo?.id)}
+            >
+              {downloadingIds.has(currentVideo?.id) ? 'Préparation…' : 'Télécharger'}
+            </button>
+          </div>
+        </>
+      )}
+    </div>
   )
 }
 
