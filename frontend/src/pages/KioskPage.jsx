@@ -26,79 +26,158 @@ const STATUS_LABEL = {
 
 function GoProSVG({ className }) {
   return (
-    <svg viewBox="0 0 120 80" className={className} xmlns="http://www.w3.org/2000/svg">
-      {/* Corps */}
-      <rect x="4" y="8" width="112" height="64" rx="12" fill="#1c1c1c" stroke="#3a3a3a" strokeWidth="1.5"/>
-      {/* Rail latéral gauche */}
-      <rect x="4" y="22" width="7" height="36" rx="3.5" fill="#131313" stroke="#2a2a2a" strokeWidth="1"/>
-      {/* Boîtier objectif */}
-      <circle cx="60" cy="40" r="23" fill="#0f0f0f" stroke="#2a2a2a" strokeWidth="2"/>
-      {/* Anneau bague */}
-      <circle cx="60" cy="40" r="19" fill="#0a0a0a" stroke="#3d3d3d" strokeWidth="1.5"/>
-      {/* Objectif */}
-      <circle cx="60" cy="40" r="13" fill="#060606" stroke="#3b82f6" strokeWidth="1.2"/>
-      {/* Iris */}
-      <circle cx="60" cy="40" r="7" fill="#0c0c0c"/>
-      {/* Reflet */}
-      <circle cx="54" cy="34" r="3.5" fill="rgba(255,255,255,0.06)"/>
-      <circle cx="53" cy="33" r="1.6" fill="rgba(255,255,255,0.11)"/>
-      {/* Bouton REC */}
-      <circle cx="101" cy="19" r="7" fill="#1a0000" stroke="#500" strokeWidth="1"/>
-      <circle cx="101" cy="19" r="4.5" fill="#cc0000"/>
-      {/* Encart logo (bas gauche) */}
-      <rect x="10" y="56" width="22" height="10" rx="3" fill="#111" stroke="#252525" strokeWidth="0.75"/>
-      {/* Ports USB bas */}
-      <rect x="44" y="68" width="32" height="3" rx="1.5" fill="#111" stroke="#2a2a2a" strokeWidth="0.75"/>
+    <svg viewBox="0 0 160 106" className={className} xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="gp-screen" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#0d2a4a"/>
+          <stop offset="100%" stopColor="#070f1a"/>
+        </linearGradient>
+        <radialGradient id="gp-lens" cx="38%" cy="33%">
+          <stop offset="0%"   stopColor="#1a083a"/>
+          <stop offset="40%"  stopColor="#080218"/>
+          <stop offset="100%" stopColor="#030108"/>
+        </radialGradient>
+      </defs>
+
+      {/* Corps — noir texturé */}
+      <rect x="2" y="2" width="156" height="102" rx="14" fill="#18191e" stroke="#28292e" strokeWidth="1.5"/>
+
+      {/* Bande REC rouge en haut */}
+      <rect x="16" y="3" width="56" height="7" rx="3.5" fill="#bb0000"/>
+      <rect x="18" y="4" width="20" height="5" rx="2.5" fill="#ff1a1a" opacity="0.85"/>
+
+      {/* Écran LCD gauche */}
+      <rect x="8" y="16" width="68" height="56" rx="5" fill="#08090f" stroke="#252830" strokeWidth="1"/>
+      <rect x="9" y="17" width="66" height="54" rx="4" fill="url(#gp-screen)"/>
+      {/* Reflet écran */}
+      <rect x="9" y="17" width="33" height="27" rx="4" fill="rgba(255,255,255,0.025)"/>
+
+      {/* Boîtier objectif (squircle) */}
+      <rect x="82" y="9" width="70" height="70" rx="18" fill="#0d0d0d" stroke="#212121" strokeWidth="1.5"/>
+
+      {/* Anneaux objectif */}
+      <circle cx="117" cy="44" r="28" fill="#080808" stroke="#1c1c1c" strokeWidth="1.5"/>
+      <circle cx="117" cy="44" r="23" fill="#060606" stroke="#252525" strokeWidth="1"/>
+      {/* Verre — teinte violet/pourpre caractéristique GoPro */}
+      <circle cx="117" cy="44" r="18" fill="url(#gp-lens)"/>
+      {/* Iris central */}
+      <circle cx="117" cy="44" r="9"  fill="#04020c"/>
+      {/* Reflets */}
+      <ellipse cx="109" cy="36" rx="5.5" ry="3.5" fill="rgba(140,70,220,0.13)" transform="rotate(-25 109 36)"/>
+      <circle  cx="107" cy="34" r="2.5" fill="rgba(255,255,255,0.07)"/>
+      <circle  cx="125" cy="52" r="1.5" fill="rgba(160,80,255,0.05)"/>
+
+      {/* Logo GoPro bleu */}
+      <text x="11" y="81" fontFamily="Arial Black, Arial, sans-serif" fontSize="10" fontWeight="900" fill="#1a8fff" letterSpacing="0.3">GoPro</text>
+      {/* 4 carrés GoPro */}
+      <rect x="12"  y="84" width="5.5" height="5.5" rx="0.5" fill="#1a8fff"/>
+      <rect x="19"  y="84" width="5.5" height="5.5" rx="0.5" fill="#1a8fff"/>
+      <rect x="12"  y="91" width="5.5" height="5.5" rx="0.5" fill="#1a8fff"/>
+      <rect x="19"  y="91" width="5.5" height="5.5" rx="0.5" fill="#1a8fff"/>
+
+      {/* Grille haut-parleur */}
+      <circle cx="89"  cy="82" r="1.8" fill="#242424"/>
+      <circle cx="96"  cy="82" r="1.8" fill="#242424"/>
+      <circle cx="103" cy="82" r="1.8" fill="#242424"/>
+      <circle cx="110" cy="82" r="1.8" fill="#242424"/>
+      <circle cx="89"  cy="89" r="1.8" fill="#242424"/>
+      <circle cx="96"  cy="89" r="1.8" fill="#242424"/>
+      <circle cx="103" cy="89" r="1.8" fill="#242424"/>
+      <circle cx="110" cy="89" r="1.8" fill="#242424"/>
+      <circle cx="89"  cy="96" r="1.8" fill="#242424"/>
+      <circle cx="96"  cy="96" r="1.8" fill="#242424"/>
+      <circle cx="103" cy="96" r="1.8" fill="#242424"/>
+      <circle cx="110" cy="96" r="1.8" fill="#242424"/>
     </svg>
   )
 }
 
 function Insta360SVG({ className }) {
   return (
-    <svg viewBox="0 0 80 130" className={className} xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 78 132" className={className} xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="in-lens" cx="37%" cy="33%">
+          <stop offset="0%"   stopColor="#082010"/>
+          <stop offset="35%"  stopColor="#041208"/>
+          <stop offset="100%" stopColor="#010804"/>
+        </radialGradient>
+        <linearGradient id="in-screen" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#0e2235"/>
+          <stop offset="100%" stopColor="#060d18"/>
+        </linearGradient>
+      </defs>
+
       {/* Corps */}
-      <rect x="10" y="5" width="60" height="120" rx="16" fill="#1c1c1c" stroke="#3a3a3a" strokeWidth="1.5"/>
-      {/* Objectif haut */}
-      <circle cx="40" cy="30" r="19" fill="#0f0f0f" stroke="#2a2a2a" strokeWidth="2"/>
-      <circle cx="40" cy="30" r="15" fill="#0a0a0a" stroke="#3d3d3d" strokeWidth="1.5"/>
-      <circle cx="40" cy="30" r="10" fill="#060606" stroke="#8b5cf6" strokeWidth="1.2"/>
-      <circle cx="40" cy="30" r="5.5" fill="#0c0c0c"/>
-      <circle cx="34" cy="24" r="3" fill="rgba(255,255,255,0.06)"/>
-      <circle cx="33" cy="23" r="1.3" fill="rgba(255,255,255,0.11)"/>
-      {/* Objectif bas */}
-      <circle cx="40" cy="100" r="19" fill="#0f0f0f" stroke="#2a2a2a" strokeWidth="2"/>
-      <circle cx="40" cy="100" r="15" fill="#0a0a0a" stroke="#3d3d3d" strokeWidth="1.5"/>
-      <circle cx="40" cy="100" r="10" fill="#060606" stroke="#8b5cf6" strokeWidth="1.2"/>
-      <circle cx="40" cy="100" r="5.5" fill="#0c0c0c"/>
-      <circle cx="34" cy="94" r="3" fill="rgba(255,255,255,0.06)"/>
-      <circle cx="33" cy="93" r="1.3" fill="rgba(255,255,255,0.11)"/>
-      {/* Bouton latéral */}
-      <rect x="70" y="58" width="4" height="14" rx="2" fill="#252525" stroke="#333" strokeWidth="0.75"/>
-      {/* Port USB bas */}
-      <rect x="30" y="122" width="20" height="2.5" rx="1.25" fill="#111" stroke="#2a2a2a" strokeWidth="0.75"/>
+      <rect x="5" y="10" width="68" height="118" rx="14" fill="#1e1f24" stroke="#2a2b30" strokeWidth="1.5"/>
+
+      {/* Logement objectif fisheye (dépasse du corps) */}
+      <circle cx="39" cy="28" r="22" fill="#111" stroke="#1e1e1e" strokeWidth="2"/>
+      {/* Anneaux concentriques */}
+      <circle cx="39" cy="28" r="18.5" fill="#0d0d0d" stroke="#252525" strokeWidth="1.5"/>
+      <circle cx="39" cy="28" r="14.5" fill="#090909" stroke="#1e2818" strokeWidth="1"/>
+      {/* Verre — teinte verte/teal caractéristique Insta360 */}
+      <circle cx="39" cy="28" r="11"   fill="url(#in-lens)"/>
+      {/* Iris */}
+      <circle cx="39" cy="28" r="5.5"  fill="#020a04"/>
+      {/* Reflets verts */}
+      <ellipse cx="33" cy="22" rx="4.5" ry="3" fill="rgba(30,160,60,0.14)" transform="rotate(-20 33 22)"/>
+      <circle  cx="31" cy="20" r="2"   fill="rgba(255,255,255,0.08)"/>
+      <circle  cx="45" cy="33" r="1.5" fill="rgba(40,180,70,0.06)"/>
+
+      {/* Écran tactile */}
+      <rect x="8"  y="53" width="62" height="60" rx="5" fill="#070b12" stroke="#1e2330" strokeWidth="1"/>
+      <rect x="9"  y="54" width="60" height="58" rx="4" fill="url(#in-screen)"/>
+      {/* Reflet écran */}
+      <rect x="9"  y="54" width="30" height="29" rx="4" fill="rgba(255,255,255,0.02)"/>
+
+      {/* Texte Insta360 */}
+      <text x="39" y="49" fontFamily="Arial, sans-serif" fontSize="6.5" fontWeight="600" fill="#777" textAnchor="middle" letterSpacing="0.2">Insta360</text>
+
+      {/* Deux boutons bas */}
+      <circle cx="24" cy="122" r="5.5" fill="#141418" stroke="#282830" strokeWidth="1"/>
+      <circle cx="24" cy="122" r="3.5" fill="#0a0a0e"/>
+      <circle cx="54" cy="122" r="5.5" fill="#141418" stroke="#282830" strokeWidth="1"/>
+      <circle cx="54" cy="122" r="3.5" fill="#0a0a0e"/>
+
+      {/* LED bleue */}
+      <circle cx="39" cy="122" r="2.5" fill="#0055ee" opacity="0.9"/>
+      <circle cx="39" cy="122" r="1.2" fill="#4499ff"/>
+
+      {/* Boutons latéraux */}
+      <rect x="73" y="58" width="4" height="14" rx="2" fill="#252528" stroke="#303035" strokeWidth="0.75"/>
+      <rect x="73" y="75" width="4" height="9"  rx="2" fill="#252528" stroke="#303035" strokeWidth="0.75"/>
     </svg>
   )
 }
 
 function GenericCameraSVG({ className }) {
   return (
-    <svg viewBox="0 0 110 82" className={className} xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 130 90" className={className} xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="gen-lens" cx="38%" cy="33%">
+          <stop offset="0%"   stopColor="#101020"/>
+          <stop offset="100%" stopColor="#030308"/>
+        </radialGradient>
+      </defs>
       {/* Bosse viseur */}
-      <rect x="34" y="4" width="42" height="14" rx="5" fill="#1c1c1c" stroke="#3a3a3a" strokeWidth="1.5"/>
+      <rect x="36" y="3" width="46" height="15" rx="5" fill="#1c1c22" stroke="#2e2e34" strokeWidth="1.5"/>
       {/* Corps */}
-      <rect x="6" y="16" width="98" height="60" rx="11" fill="#1c1c1c" stroke="#3a3a3a" strokeWidth="1.5"/>
+      <rect x="5" y="16" width="120" height="68" rx="11" fill="#1c1c22" stroke="#2e2e34" strokeWidth="1.5"/>
       {/* Boîtier objectif */}
-      <circle cx="55" cy="46" r="22" fill="#0f0f0f" stroke="#2a2a2a" strokeWidth="2"/>
-      <circle cx="55" cy="46" r="17" fill="#0a0a0a" stroke="#3d3d3d" strokeWidth="1.5"/>
-      <circle cx="55" cy="46" r="11" fill="#060606" stroke="#555" strokeWidth="1"/>
-      <circle cx="55" cy="46" r="5.5" fill="#0c0c0c"/>
-      <circle cx="48" cy="39" r="3.5" fill="rgba(255,255,255,0.06)"/>
-      <circle cx="47" cy="38" r="1.5" fill="rgba(255,255,255,0.11)"/>
+      <circle cx="75" cy="50" r="23" fill="#0e0e14" stroke="#222228" strokeWidth="2"/>
+      <circle cx="75" cy="50" r="18" fill="#090910" stroke="#252530" strokeWidth="1.5"/>
+      <circle cx="75" cy="50" r="12" fill="url(#gen-lens)"/>
+      <circle cx="75" cy="50" r="6"  fill="#030308"/>
+      <circle cx="67" cy="42" r="3.5" fill="rgba(255,255,255,0.06)"/>
+      <circle cx="66" cy="41" r="1.5" fill="rgba(255,255,255,0.1)"/>
       {/* Bouton déclencheur */}
-      <circle cx="89" cy="21" r="6" fill="#252525" stroke="#333" strokeWidth="1"/>
-      <circle cx="89" cy="21" r="3.5" fill="#1e1e1e"/>
+      <circle cx="110" cy="22" r="7"  fill="#1e1e24" stroke="#2e2e34" strokeWidth="1"/>
+      <circle cx="110" cy="22" r="4.5" fill="#141418"/>
       {/* Flash */}
-      <rect x="12" y="20" width="14" height="10" rx="3" fill="#111" stroke="#2a2a2a" strokeWidth="0.75"/>
+      <rect x="12" y="22" width="18" height="13" rx="3" fill="#111116" stroke="#252530" strokeWidth="0.75"/>
+      <rect x="13" y="23" width="16" height="11" rx="2" fill="#0a0a10" opacity="0.7"/>
+      {/* Viewfinder */}
+      <rect x="40" y="6" width="10" height="9" rx="2" fill="#0a0a10" stroke="#222" strokeWidth="0.75"/>
     </svg>
   )
 }
