@@ -256,16 +256,17 @@ def ingest_device(device_node: str, serial: str, db: Session) -> None:
         except subprocess.CalledProcessError as e:
             os.rmdir(mount_point)
             # Périphérique déjà monté par l'hôte (udisks2, automonteur…) ?
-            # /proc/mounts est visible depuis le container via la propagation de namespace.
+            # lsblk lit depuis sysfs et résout les alias UUID/by-id sans ambiguïté.
             existing = None
             try:
-                with open("/proc/mounts") as f:
-                    for line in f:
-                        parts = line.split()
-                        if len(parts) >= 2 and parts[0] == device_node:
-                            existing = parts[1]
-                            break
-            except OSError:
+                lsblk = subprocess.run(
+                    ["lsblk", "-no", "MOUNTPOINT", device_node],
+                    capture_output=True, text=True,
+                )
+                candidates = [l.strip() for l in lsblk.stdout.splitlines() if l.strip()]
+                if candidates:
+                    existing = candidates[0]
+            except Exception:
                 pass
             if existing:
                 mount_point = existing
