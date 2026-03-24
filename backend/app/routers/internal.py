@@ -2,6 +2,7 @@ import logging
 import os
 import tempfile
 import threading
+import time
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, File, Query, UploadFile
@@ -10,6 +11,7 @@ from pydantic import BaseModel
 from app.database import SessionLocal, get_db
 from app.models.user import User
 from app.services.video_ingestor import ingest_device, ingest_gopro_http, ingest_mtp_device
+from app import camera_state
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
@@ -81,6 +83,9 @@ def camera_connected(event: CameraEvent):
         f"device_node: {event.device_node} | model: {event.model_name}"
     )
 
+    # Enregistrer immédiatement dans le kiosque — card visible avant toute IO
+    camera_state.register(event.serial)
+
     from app.models.camera import Camera
     from app.services.video_ingestor import _parse_model_string, _upsert_camera
 
@@ -113,6 +118,8 @@ def camera_connected(event: CameraEvent):
 
     if not user:
         logger.info(f"[USB] Serial inconnu : {event.serial} — onboarding requis")
+        camera_state.update(event.serial, make=enriched_model, status="UNKNOWN",
+                             finished_at=time.time())
         # Éviter les doublons
         if not any(c["serial"] == event.serial for c in _cameras):
             _cameras.append({
@@ -124,6 +131,11 @@ def camera_connected(event: CameraEvent):
                 "connected_at": datetime.now(timezone.utc).isoformat(),
             })
         return {"status": "onboarding_required", "serial": event.serial}
+
+    # Serial connu → pré-remplir kiosque avec les infos déjà disponibles
+    camera_state.update(event.serial, owner_name=user_name)
+    if cam_record and (cam_record.make or cam_record.model):
+        camera_state.update(event.serial, make=cam_record.make or "", model=cam_record.model or "")
 
     # Serial connu → ingestion
     if event.mtp and event.vendor_id == "2672":
