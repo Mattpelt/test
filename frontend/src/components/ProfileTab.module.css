@@ -15,11 +15,36 @@
   gap: 1.25rem;
 }
 
+.cardTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
 .cardTitle {
   font-size: 1rem;
   font-weight: 700;
   color: var(--color-text-2);
   margin: 0;
+}
+
+.roleAdmin {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
+  background: #1e3a5f;
+  color: #60a5fa;
+}
+
+.roleSautant {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-muted);
 }
 
 /* ── Form ── */

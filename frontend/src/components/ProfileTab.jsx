@@ -14,7 +14,15 @@ export default function ProfileTab() {
     try {
       const { data } = await api.get('/users/me')
       setProfile(data)
-      setUser(data)
+      // Sync uniquement les champs éditables — ne jamais écraser is_admin
+      setUser(prev => ({
+        ...prev,
+        first_name:            data.first_name,
+        last_name:             data.last_name,
+        email:                 data.email,
+        afifly_name:           data.afifly_name,
+        notifications_enabled: data.notifications_enabled,
+      }))
     } finally {
       setLoading(false)
     }
@@ -95,7 +103,12 @@ function ProfileForm({ profile, onSaved }) {
 
   return (
     <section className={pStyles.card}>
-      <h2 className={pStyles.cardTitle}>Informations personnelles</h2>
+      <div className={pStyles.cardTitleRow}>
+        <h2 className={pStyles.cardTitle}>Informations personnelles</h2>
+        <span className={profile.is_admin ? pStyles.roleAdmin : pStyles.roleSautant}>
+          {profile.is_admin ? 'Administrateur' : 'Sautant'}
+        </span>
+      </div>
       <form onSubmit={submit} className={pStyles.form}>
         <div className={pStyles.grid2}>
           <div className={pStyles.field}>
