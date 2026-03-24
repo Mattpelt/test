@@ -171,8 +171,8 @@ function UserForm({ user, onSuccess, onCancel }) {
     email:                 user?.email ?? '',
     afifly_name:           user?.afifly_name ?? '',
     camera_serials:        user?.camera_serials?.join(', ') ?? '',
-    pin:                   '',
-    pin_confirm:           '',
+    password:              '',
+    password_confirm:      '',
     is_admin:              user?.is_admin ?? false,
     notifications_enabled: user?.notifications_enabled ?? true,
   })
@@ -187,14 +187,13 @@ function UserForm({ user, onSuccess, onCancel }) {
     e.preventDefault()
     setError('')
 
-    if (!isEdit || form.pin) {
-      const pinLen = form.is_admin ? 6 : 4
-      if (!/^\d+$/.test(form.pin) || form.pin.length !== pinLen) {
-        setError(`Le PIN doit contenir exactement ${pinLen} chiffres.`)
+    if (!isEdit || form.password) {
+      if (form.password.length < 8) {
+        setError('Le mot de passe doit contenir au moins 8 caractères.')
         return
       }
-      if (form.pin !== form.pin_confirm) {
-        setError('Les deux PIN ne correspondent pas.')
+      if (form.password !== form.password_confirm) {
+        setError('Les deux mots de passe ne correspondent pas.')
         return
       }
     }
@@ -208,15 +207,14 @@ function UserForm({ user, onSuccess, onCancel }) {
       is_admin:              form.is_admin,
       notifications_enabled: form.notifications_enabled,
     }
-    if (form.pin) payload.pin = form.pin
+    if (form.password) payload.password = form.password
 
     setLoading(true)
     try {
       if (isEdit) {
         await api.patch(`/users/${user.id}`, payload)
       } else {
-        if (!form.pin) { setError('Le PIN est obligatoire.'); return }
-        await api.post('/users', { ...payload, pin: form.pin })
+        await api.post('/users', payload)
       }
       onSuccess()
     } catch (err) {
@@ -226,40 +224,36 @@ function UserForm({ user, onSuccess, onCancel }) {
     }
   }
 
-  const pinLen = form.is_admin ? 6 : 4
-
   return (
     <form className={styles.inlineForm} onSubmit={submit}>
       <h3 className={styles.formTitle}>{isEdit ? 'Modifier le compte' : 'Nouveau compte'}</h3>
       <div className={styles.formGrid}>
         <input className={styles.input} placeholder="Prénom *" value={form.first_name} onChange={set('first_name')} required />
         <input className={styles.input} placeholder="Nom *" value={form.last_name} onChange={set('last_name')} required />
-        <input className={styles.input} placeholder="Email" type="email" value={form.email} onChange={set('email')} />
+        <input className={styles.input} placeholder="Email *" type="email" value={form.email} onChange={set('email')} required />
         <input className={styles.input} placeholder="Nom Afifly" value={form.afifly_name} onChange={set('afifly_name')} />
         <input className={styles.input} placeholder="Caméras (serials séparés par virgule)" value={form.camera_serials} onChange={set('camera_serials')} />
         <input
           className={styles.input}
-          placeholder={isEdit ? `Nouveau PIN (${pinLen} chiffres, laisser vide pour ne pas changer)` : `PIN * (${pinLen} chiffres)`}
+          placeholder={isEdit ? 'Nouveau mot de passe (laisser vide pour ne pas changer)' : 'Mot de passe * (8 caractères min.)'}
           type="password"
-          inputMode="numeric"
-          maxLength={pinLen}
-          value={form.pin}
-          onChange={set('pin')}
+          value={form.password}
+          onChange={set('password')}
+          autoComplete="new-password"
           required={!isEdit}
         />
         <input
           className={styles.input}
-          placeholder="Confirmer PIN"
+          placeholder="Confirmer le mot de passe"
           type="password"
-          inputMode="numeric"
-          maxLength={pinLen}
-          value={form.pin_confirm}
-          onChange={set('pin_confirm')}
+          value={form.password_confirm}
+          onChange={set('password_confirm')}
+          autoComplete="new-password"
           required={!isEdit}
         />
         <label className={styles.checkLabel}>
           <input type="checkbox" checked={form.is_admin} onChange={set('is_admin')} />
-          Administrateur (PIN 6 chiffres)
+          Administrateur
         </label>
         <label className={styles.checkLabel}>
           <input type="checkbox" checked={form.notifications_enabled} onChange={set('notifications_enabled')} />
