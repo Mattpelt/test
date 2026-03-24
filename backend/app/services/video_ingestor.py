@@ -295,7 +295,7 @@ def ingest_device(device_node: str, serial: str, db: Session) -> None:
         matches = match_videos_to_rots(video_list, user.id, db)
 
         # Labels des rotations matchées pour le kiosque
-        preview_rot_ids = sorted({m[0] for m in matches.values()})
+        preview_rot_ids = sorted({m[0] for m in matches.values() if m})
         camera_state.update(usb_serial, rot_labels=[f"Rot #{r}" for r in preview_rot_ids])
 
         total = len(video_files)
@@ -611,7 +611,7 @@ def ingest_mtp_device(serial: str, db: Session) -> None:
         matches = match_videos_to_rots(video_list, user.id, db)
 
         # Labels des rotations matchées pour le kiosque
-        preview_rot_ids = sorted({m[0] for m in matches.values()})
+        preview_rot_ids = sorted({m[0] for m in matches.values() if m})
         camera_state.update(serial, rot_labels=[f"Rot #{r}" for r in preview_rot_ids])
 
         ingested = skipped = unmatched = 0
