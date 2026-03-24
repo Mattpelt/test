@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.auth import create_access_token, get_current_user, verify_password
+from app.auth import create_access_token, get_current_user, pin_to_lookup_hash, verify_password
 from app.database import get_db
 from app.models.user import User
 from app.schemas.user import UserResponse
@@ -31,6 +31,26 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Email ou mot de passe incorrect.",
+        )
+    return {"access_token": create_access_token(user.id)}
+
+
+class PinLoginRequest(BaseModel):
+    pin: str
+
+
+@router.post("/pin-login", response_model=TokenResponse)
+def pin_login(payload: PinLoginRequest, db: Session = Depends(get_db)):
+    """Authentifie un sautant par son PIN à 4 chiffres (créé lors de l'onboarding kiosque)."""
+    lookup = pin_to_lookup_hash(payload.pin)
+    user = db.query(User).filter(
+        User.pin_lookup_hash == lookup,
+        User.is_active == True,
+    ).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="PIN incorrect.",
         )
     return {"access_token": create_access_token(user.id)}
 

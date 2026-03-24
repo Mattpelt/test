@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import styles from './OnboardingPage.module.css'
@@ -7,33 +7,65 @@ import styles from './OnboardingPage.module.css'
 export default function OnboardingPage() {
   const { loginWithToken } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const serialParam = searchParams.get('serial') || ''
 
-  // Liste des caméras détectées (en attente d'onboarding)
-  const [cameras, setCameras] = useState([])
-  // Serials sélectionnés par l'utilisateur
-  const [selected, setSelected] = useState(new Set())
+  // Étape 0 : choix du parcours
+  const [mode, setMode] = useState(null) // null | 'new' | 'existing'
 
-  const [form, setForm] = useState({
+  // ── Parcours "utilisateur existant" (PIN) ───────────────────────────────
+  const [pin, setPin]           = useState('')
+  const [pinError, setPinError] = useState('')
+  const [pinLoading, setPinLoading] = useState(false)
+
+  async function submitPin(e) {
+    e.preventDefault()
+    setPinError('')
+    if (!/^\d{4}$/.test(pin)) { setPinError('PIN de 4 chiffres requis.'); return }
+    setPinLoading(true)
+    try {
+      const { data } = await api.post('/auth/pin-login', { pin })
+      const token = data.access_token
+      if (serialParam) {
+        await api.post(
+          '/users/me/cameras/claim',
+          { serial: serialParam },
+          { headers: { Authorization: `Bearer ${token}` } },
+        )
+      }
+      await loginWithToken(token)
+      navigate('/', { replace: true })
+    } catch (err) {
+      setPinError(err.response?.data?.detail ?? 'PIN incorrect.')
+    } finally {
+      setPinLoading(false)
+    }
+  }
+
+  // ── Parcours "nouveau compte" ────────────────────────────────────────────
+  const [cameras, setCameras]   = useState([])
+  const [selected, setSelected] = useState(() => serialParam ? new Set([serialParam]) : new Set())
+  const [form, setForm]         = useState({
     first_name: '', last_name: '', afifly_name: '', email: '',
     pin: '', pinConfirm: '',
   })
-  const [error, setError] = useState('')
+  const [error, setError]   = useState('')
   const [loading, setLoading] = useState(false)
   const pollRef = useRef(null)
 
-  // Polling : mise à jour de la liste des caméras toutes les 2s
+  // Polling caméras en attente (uniquement sur le parcours "nouveau")
   useEffect(() => {
+    if (mode !== 'new') return
     async function fetchCameras() {
       try {
         const { data } = await api.get('/internal/onboarding/pending')
         setCameras(data.cameras ?? [])
       } catch { /* silencieux */ }
     }
-
-    fetchCameras() // appel immédiat au montage
+    fetchCameras()
     pollRef.current = setInterval(fetchCameras, 2000)
     return () => clearInterval(pollRef.current)
-  }, [])
+  }, [mode])
 
   function toggleCamera(serial) {
     setSelected(prev => {
@@ -43,23 +75,15 @@ export default function OnboardingPage() {
     })
   }
 
-  function set(field) {
+  function setField(field) {
     return e => setForm(f => ({ ...f, [field]: e.target.value }))
   }
 
-  async function submit(e) {
+  async function submitNew(e) {
     e.preventDefault()
     setError('')
-
-    if (!/^\d{4}$/.test(form.pin)) {
-      setError('Le PIN doit contenir exactement 4 chiffres.')
-      return
-    }
-    if (form.pin !== form.pinConfirm) {
-      setError('Les deux PIN ne correspondent pas.')
-      return
-    }
-
+    if (!/^\d{4}$/.test(form.pin)) { setError('Le PIN doit contenir exactement 4 chiffres.'); return }
+    if (form.pin !== form.pinConfirm) { setError('Les deux PIN ne correspondent pas.'); return }
     clearInterval(pollRef.current)
     setLoading(true)
     try {
@@ -81,23 +105,90 @@ export default function OnboardingPage() {
     }
   }
 
+  // ── Rendu : étape 0 — choix ──────────────────────────────────────────────
+  if (mode === null) {
+    return (
+      <div className={styles.wrapper}>
+        <div className={styles.card}>
+          <button className={styles.back} onClick={() => navigate('/kiosk')}>← Retour</button>
+          <h1 className={styles.title}>Identification</h1>
+          <p className={styles.subtitle}>
+            {serialParam
+              ? 'Cette caméra n\'est pas encore associée à un compte.'
+              : 'Bienvenue — commençons par vérifier si vous avez déjà un compte.'}
+          </p>
+          <div className={styles.choiceGrid}>
+            <button className={styles.choiceBtn} onClick={() => setMode('existing')}>
+              <div className={styles.choiceBadge}>→</div>
+              <div className={styles.choiceLabel}>J'ai déjà un compte</div>
+              <div className={styles.choiceDesc}>Associer cette caméra à mon compte existant</div>
+            </button>
+            <button className={styles.choiceBtn} onClick={() => setMode('new')}>
+              <div className={styles.choiceBadge}>+</div>
+              <div className={styles.choiceLabel}>Créer mon compte</div>
+              <div className={styles.choiceDesc}>Première utilisation du système</div>
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Rendu : parcours existant — saisie PIN ───────────────────────────────
+  if (mode === 'existing') {
+    return (
+      <div className={styles.wrapper}>
+        <div className={styles.card}>
+          <button className={styles.back} onClick={() => setMode(null)}>← Retour</button>
+          <h1 className={styles.title}>Connexion par PIN</h1>
+          <p className={styles.subtitle}>
+            Entrez votre PIN à 4 chiffres pour associer cette caméra à votre compte.
+          </p>
+          <form onSubmit={submitPin} className={styles.form}>
+            <div className={styles.field}>
+              <label className={styles.label}>
+                PIN
+                <span className={styles.hint}>4 chiffres</span>
+              </label>
+              <input
+                className={`${styles.input} ${styles.pinInput}`}
+                type="password"
+                inputMode="numeric"
+                maxLength={4}
+                value={pin}
+                onChange={e => setPin(e.target.value)}
+                placeholder="••••"
+                autoFocus
+                required
+              />
+            </div>
+            {pinError && <p className={styles.error}>{pinError}</p>}
+            <button type="submit" className={styles.button} disabled={pinLoading}>
+              {pinLoading ? 'Connexion…' : 'Se connecter et associer la caméra'}
+            </button>
+          </form>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Rendu : parcours nouveau compte ─────────────────────────────────────
   return (
     <div className={styles.wrapper}>
       <div className={styles.card}>
-        <button className={styles.back} onClick={() => navigate('/login')}>← Retour</button>
-
+        <button className={styles.back} onClick={() => setMode(null)}>← Retour</button>
         <h1 className={styles.title}>Créer mon compte</h1>
 
-        <form onSubmit={submit} className={styles.form}>
+        <form onSubmit={submitNew} className={styles.form}>
           {/* Identité */}
           <div className={styles.row}>
             <div className={styles.field}>
               <label className={styles.label}>Prénom *</label>
-              <input className={styles.input} value={form.first_name} onChange={set('first_name')} required />
+              <input className={styles.input} value={form.first_name} onChange={setField('first_name')} required />
             </div>
             <div className={styles.field}>
               <label className={styles.label}>Nom *</label>
-              <input className={styles.input} value={form.last_name} onChange={set('last_name')} required />
+              <input className={styles.input} value={form.last_name} onChange={setField('last_name')} required />
             </div>
           </div>
 
@@ -109,7 +200,7 @@ export default function OnboardingPage() {
             <input
               className={styles.input}
               value={form.afifly_name}
-              onChange={set('afifly_name')}
+              onChange={setField('afifly_name')}
               placeholder="NOM Prénom"
               required
             />
@@ -119,7 +210,7 @@ export default function OnboardingPage() {
             <label className={styles.label}>
               Email <span className={styles.optional}>(optionnel — pour recevoir les notifications)</span>
             </label>
-            <input className={styles.input} type="email" value={form.email} onChange={set('email')} />
+            <input className={styles.input} type="email" value={form.email} onChange={setField('email')} />
           </div>
 
           <div className={styles.divider} />
@@ -155,7 +246,6 @@ export default function OnboardingPage() {
                     onToggle={() => toggleCamera(cam.serial)}
                   />
                 ))}
-                {/* Indicateur "en attente d'autres caméras" */}
                 <div className={styles.cameraMoreHint}>
                   <span className={styles.pulseSmall} />
                   <span>En attente d'autres caméras…</span>
@@ -179,7 +269,7 @@ export default function OnboardingPage() {
                 inputMode="numeric"
                 maxLength={4}
                 value={form.pin}
-                onChange={set('pin')}
+                onChange={setField('pin')}
                 placeholder="••••"
                 required
               />
@@ -192,7 +282,7 @@ export default function OnboardingPage() {
                 inputMode="numeric"
                 maxLength={4}
                 value={form.pinConfirm}
-                onChange={set('pinConfirm')}
+                onChange={setField('pinConfirm')}
                 placeholder="••••"
                 required
               />
@@ -211,12 +301,11 @@ export default function OnboardingPage() {
 }
 
 /* ─────────────────────────────────────────────────
-   Carte caméra individuelle
+   Carte caméra individuelle (parcours nouveau compte)
 ───────────────────────────────────────────────── */
 function CameraCard({ camera, selected, onToggle }) {
   const [elapsed, setElapsed] = useState(getElapsed(camera.connected_at))
 
-  // Met à jour l'affichage "branché depuis X min" chaque minute
   useEffect(() => {
     const id = setInterval(() => setElapsed(getElapsed(camera.connected_at)), 30000)
     return () => clearInterval(id)
@@ -244,8 +333,8 @@ function CameraCard({ camera, selected, onToggle }) {
 function getElapsed(isoDate) {
   if (!isoDate) return ''
   const diff = Math.floor((Date.now() - new Date(isoDate).getTime()) / 1000)
-  if (diff < 60)  return 'Branché à l\'instant'
-  if (diff < 120) return 'Branché depuis 1 minute'
+  if (diff < 60)   return 'Branché à l\'instant'
+  if (diff < 120)  return 'Branché depuis 1 minute'
   if (diff < 3600) return `Branché depuis ${Math.floor(diff / 60)} minutes`
   return `Branché depuis ${Math.floor(diff / 3600)}h`
 }

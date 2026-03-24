@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import styles from './KioskPage.module.css'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -229,6 +229,7 @@ function ProgressRing({ pct }) {
 // ─── Card caméra ────────────────────────────────────────────────────────────
 
 function CameraCard({ cam }) {
+  const navigate  = useNavigate()
   const hasBytes  = cam.bytes_total > 0
   const pct       = hasBytes ? Math.min(100, Math.round((cam.bytes_done / cam.bytes_total) * 100)) : 0
   const isActive  = cam.status === 'DOWNLOADING' || cam.status === 'COPYING'
@@ -247,7 +248,13 @@ function CameraCard({ cam }) {
   const cameraLabel = [cam.make, cam.model].filter(Boolean).join(' ') || cam.serial
 
   return (
-    <div className={`${styles.card} ${cardMod}`}>
+    <div
+      className={`${styles.card} ${cardMod}`}
+      onClick={isUnknown ? () => navigate(`/onboarding?serial=${encodeURIComponent(cam.serial)}`) : undefined}
+      role={isUnknown ? 'button' : undefined}
+      tabIndex={isUnknown ? 0 : undefined}
+      onKeyDown={isUnknown ? e => e.key === 'Enter' && navigate(`/onboarding?serial=${encodeURIComponent(cam.serial)}`) : undefined}
+    >
 
       {/* En-tête : modèle caméra + pastille statut */}
       <div className={styles.cardTop}>
@@ -259,9 +266,11 @@ function CameraCard({ cam }) {
 
       {/* Nom propriétaire — info principale, très lisible de loin */}
       <div className={styles.ownerName}>
-        {cam.owner_name
-          ? cam.owner_name.toUpperCase()
-          : <span className={styles.ownerPending}>{cam.serial}</span>
+        {isUnknown
+          ? <span className={styles.ownerUnknown}>Qui est-ce&nbsp;?</span>
+          : cam.owner_name
+            ? cam.owner_name.toUpperCase()
+            : <span className={styles.ownerPending}>{cam.serial}</span>
         }
       </div>
 
@@ -330,9 +339,9 @@ function CameraCard({ cam }) {
         <div className={styles.errorMsg}>{cam.error_msg}</div>
       )}
 
-      {/* Caméra inconnue */}
+      {/* Caméra inconnue — CTA */}
       {isUnknown && (
-        <div className={styles.unknownMsg}>Aucun compte associé à cette caméra — onboarding requis.</div>
+        <div className={styles.unknownCta}>Toucher pour s'identifier →</div>
       )}
     </div>
   )
