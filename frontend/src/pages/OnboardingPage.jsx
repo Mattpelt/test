@@ -40,7 +40,7 @@ export default function OnboardingPage() {
         )
       }
       await loginWithToken(token)
-      navigate('/', { replace: true })
+      navigate('/kiosk', { replace: true })
     } catch (err) {
       setLoginError(err.response?.data?.detail ?? 'Email ou mot de passe incorrect.')
     } finally {
@@ -103,7 +103,7 @@ export default function OnboardingPage() {
       }
       const { data } = await api.post('/users/onboard', payload)
       await loginWithToken(data.access_token)
-      navigate('/', { replace: true })
+      navigate('/kiosk', { replace: true })
     } catch (err) {
       setError(err.response?.data?.detail ?? 'Erreur lors de la création du compte.')
     } finally {
