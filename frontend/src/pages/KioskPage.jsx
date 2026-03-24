@@ -189,7 +189,7 @@ export default function KioskPage() {
     }
 
     poll()
-    const id = setInterval(poll, 3000)
+    const id = setInterval(poll, 1000)
     return () => { cancelled = true; clearInterval(id) }
   }, [])
 
