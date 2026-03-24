@@ -254,12 +254,13 @@ UDEV_SCRIPT
 sudo chmod +x /usr/local/bin/skydive-disconnect.sh
 
 sudo tee /etc/udev/rules.d/99-skydive-camera.rules > /dev/null <<'UDEV_RULE'
-# Caméras MTP/PTP (GoPro via gphoto2, Sony, etc.)
-ACTION=="bind",   SUBSYSTEM=="usb",   ENV{DEVTYPE}=="usb_device", ENV{ID_GPHOTO2}=="1",       RUN+="/usr/local/bin/skydive-camera.sh"
-ACTION=="remove", SUBSYSTEM=="usb",   ENV{DEVTYPE}=="usb_device", ENV{ID_GPHOTO2}=="1",       RUN+="/usr/local/bin/skydive-disconnect.sh"
-# Caméras USB Mass Storage (Insta360, etc.)
-ACTION=="add",    SUBSYSTEM=="block", ENV{ID_BUS}=="usb",          ENV{DEVTYPE}=="partition",  RUN+="/usr/local/bin/skydive-storage.sh"
-ACTION=="remove", SUBSYSTEM=="block", ENV{ID_BUS}=="usb",          ENV{DEVTYPE}=="partition",  RUN+="/usr/local/bin/skydive-disconnect.sh"
+# Connexion — caméras MTP/PTP (GoPro via gphoto2, Sony, etc.)
+ACTION=="bind",   SUBSYSTEM=="usb",   ENV{DEVTYPE}=="usb_device", ENV{ID_GPHOTO2}=="1",      RUN+="/usr/local/bin/skydive-camera.sh"
+# Connexion — caméras USB Mass Storage (Insta360, etc.)
+ACTION=="add",    SUBSYSTEM=="block", ENV{ID_BUS}=="usb",         ENV{DEVTYPE}=="partition", RUN+="/usr/local/bin/skydive-storage.sh"
+# Débranchement — toute caméra USB avec serial (MTP ou Mass Storage)
+# On écoute au niveau usb_device pour que ID_SERIAL_SHORT soit toujours disponible
+ACTION=="remove", SUBSYSTEM=="usb",   ENV{DEVTYPE}=="usb_device", ENV{ID_SERIAL_SHORT}!="",  RUN+="/usr/local/bin/skydive-disconnect.sh"
 UDEV_RULE
 
 sudo udevadm control --reload-rules
