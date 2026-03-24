@@ -180,31 +180,66 @@ fi
 # ==============================================================
 step "7/8 — Règle udev (détection caméra USB)"
 
-# Script pour caméras MTP/gphoto2 (Insta360 MTP, Sony, etc.)
+# Script pour caméras MTP/gphoto2 (GoPro HTTP, Insta360 MTP, Sony, etc.)
 sudo tee /usr/local/bin/skydive-camera.sh > /dev/null <<'UDEV_SCRIPT'
 #!/bin/bash
 # Caméras MTP/PTP (gphoto2) — lance curl via systemd pour échapper au timeout udev
 LOG=/tmp/skydive-camera.log
-echo "[$(date)] udev MTP trigger: serial=$ID_SERIAL_SHORT vendor=$ID_VENDOR_ID" >> "$LOG"
+MODEL_CLEAN=$(echo "$ID_MODEL" | tr '_' ' ')
+echo "[$(date)] udev MTP trigger: serial=$ID_SERIAL_SHORT vendor=$ID_VENDOR_ID model=$MODEL_CLEAN" >> "$LOG"
 /usr/bin/systemd-run --no-block \
   /usr/bin/curl -s -X POST http://127.0.0.1:8000/internal/camera-connected \
   -H "Content-Type: application/json" \
-  -d "{\"serial\": \"$ID_SERIAL_SHORT\", \"mtp\": true, \"vendor_id\": \"$ID_VENDOR_ID\"}" >> "$LOG" 2>&1
+  -d "{\"serial\": \"$ID_SERIAL_SHORT\", \"mtp\": true, \"vendor_id\": \"$ID_VENDOR_ID\", \"model_name\": \"$MODEL_CLEAN\"}" >> "$LOG" 2>&1
 UDEV_SCRIPT
 sudo chmod +x /usr/local/bin/skydive-camera.sh
 
-# Script pour caméras USB Mass Storage (Insta360, etc.)
-# Le container monte lui-même le block device via /dev:/dev
+# Trigger udev pour caméras USB Mass Storage (Insta360 en mode stockage, etc.)
+# Lance le worker en arrière-plan via systemd-run et lui passe les vars udev comme arguments.
 sudo tee /usr/local/bin/skydive-storage.sh > /dev/null <<'UDEV_SCRIPT'
 #!/bin/bash
 LOG=/tmp/skydive-camera.log
-echo "[$(date)] udev storage trigger: serial=$ID_SERIAL_SHORT device=$DEVNAME" >> "$LOG"
+echo "[$(date)] udev storage trigger: serial=$ID_SERIAL_SHORT device=$DEVNAME vendor=$ID_VENDOR_ID model=$ID_MODEL" >> "$LOG"
 /usr/bin/systemd-run --no-block \
-  /usr/bin/curl -s -X POST http://127.0.0.1:8000/internal/camera-connected \
-  -H "Content-Type: application/json" \
-  -d "{\"serial\": \"$ID_SERIAL_SHORT\", \"mtp\": false, \"device_node\": \"$DEVNAME\"}" >> "$LOG" 2>&1
+  /usr/local/bin/skydive-storage-worker.sh \
+  "$ID_SERIAL_SHORT" "$DEVNAME" "$ID_VENDOR_ID" "$ID_MODEL"
 UDEV_SCRIPT
 sudo chmod +x /usr/local/bin/skydive-storage.sh
+
+# Worker Mass Storage : attend que le device soit monté par l'hôte, puis appelle le backend.
+# Reçoit les vars udev en arguments (systemd-run ne propage pas l'environnement udev).
+sudo tee /usr/local/bin/skydive-storage-worker.sh > /dev/null <<'UDEV_SCRIPT'
+#!/bin/bash
+SERIAL="$1"
+DEVNAME="$2"
+VENDOR_ID="$3"
+MODEL=$(echo "$4" | tr '_' ' ')   # udev remplace les espaces par des underscores
+LOG=/tmp/skydive-camera.log
+
+# Attendre que udisks2 / l'automonteur ait fini de monter le device (max 10s)
+MOUNT_PATH=""
+for i in $(seq 1 10); do
+    MP=$(lsblk -no MOUNTPOINT "$DEVNAME" 2>/dev/null | grep -v '^[[:space:]]*$' | head -1)
+    if [ -n "$MP" ]; then
+        MOUNT_PATH="$MP"
+        break
+    fi
+    sleep 1
+done
+
+if [ -n "$MOUNT_PATH" ]; then
+    echo "[$(date)] Monté : $DEVNAME → $MOUNT_PATH" >> "$LOG"
+    DEVICE_PARAM="$MOUNT_PATH"
+else
+    echo "[$(date)] Non monté après 10s, fallback block device : $DEVNAME" >> "$LOG"
+    DEVICE_PARAM="$DEVNAME"
+fi
+
+/usr/bin/curl -s -X POST http://127.0.0.1:8000/internal/camera-connected \
+    -H "Content-Type: application/json" \
+    -d "{\"serial\": \"$SERIAL\", \"mtp\": false, \"device_node\": \"$DEVICE_PARAM\", \"vendor_id\": \"$VENDOR_ID\", \"model_name\": \"$MODEL\"}" >> "$LOG" 2>&1
+UDEV_SCRIPT
+sudo chmod +x /usr/local/bin/skydive-storage-worker.sh
 
 sudo tee /etc/udev/rules.d/99-skydive-camera.rules > /dev/null <<'UDEV_RULE'
 # Caméras MTP/PTP (GoPro via gphoto2, Sony, etc.)
