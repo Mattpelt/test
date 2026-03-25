@@ -502,6 +502,57 @@
 }
 
 /* ── Settings form ── */
+.logoSection {
+  background: var(--color-surface);
+  border-radius: 10px;
+  padding: 1.25rem;
+  max-width: 600px;
+  margin-bottom: 1.25rem;
+}
+
+.logoRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.5rem;
+  margin-top: 0.75rem;
+}
+
+.logoPreview {
+  width: 120px;
+  height: 80px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.logoImg {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.logoPlaceholder {
+  font-size: 0.75rem;
+  color: var(--color-dim);
+}
+
+.logoActions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.logoHint {
+  font-size: 0.75rem;
+  color: var(--color-dim);
+  margin: 0;
+}
+
 .settingsForm {
   background: var(--color-surface);
   border-radius: 10px;

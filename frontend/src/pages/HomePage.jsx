@@ -662,6 +662,69 @@ function VideoListView({ rots, videosByRot, onPreview, onDownload, downloadingId
 /* ─────────────────────────────────────────────────
    Onglet Paramètres
 ───────────────────────────────────────────────── */
+function LogoSection() {
+  const [hasLogo, setHasLogo] = useState(false)
+  const [logoKey, setLogoKey] = useState(0)
+  const [uploading, setUploading] = useState(false)
+  const [msg, setMsg] = useState('')
+  const fileRef = useRef(null)
+
+  async function handleFile(e) {
+    const file = e.target.files[0]
+    if (!file) return
+    const fd = new FormData()
+    fd.append('file', file)
+    setUploading(true); setMsg('')
+    try {
+      await api.post('/settings/logo', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+      setLogoKey(k => k + 1)
+      setHasLogo(true)
+      setMsg('Logo mis à jour.')
+    } catch {
+      setMsg("Erreur lors de l'upload.")
+    } finally {
+      setUploading(false)
+      e.target.value = ''
+    }
+  }
+
+  async function handleDelete() {
+    try {
+      await api.delete('/settings/logo')
+      setHasLogo(false)
+      setMsg('Logo supprimé.')
+    } catch {
+      setMsg('Erreur lors de la suppression.')
+    }
+  }
+
+  return (
+    <div className={styles.logoSection}>
+      <h3 className={styles.sectionTitle}>Logo du centre</h3>
+      <div className={styles.logoRow}>
+        <div className={styles.logoPreview}>
+          {hasLogo
+            ? <img key={logoKey} src={`/api/settings/logo?t=${logoKey}`} alt="Logo" className={styles.logoImg} onError={() => setHasLogo(false)} />
+            : <span className={styles.logoPlaceholder}>Aucun logo</span>
+          }
+          <img key={`probe-${logoKey}`} src="/api/settings/logo" alt="" style={{ display: 'none' }} onLoad={() => setHasLogo(true)} onError={() => setHasLogo(false)} />
+        </div>
+        <div className={styles.logoActions}>
+          <input type="file" ref={fileRef} accept="image/png,image/jpeg,image/webp" onChange={handleFile} style={{ display: 'none' }} />
+          <button type="button" className={styles.primaryBtn} onClick={() => fileRef.current.click()} disabled={uploading}>
+            {uploading ? 'Upload…' : hasLogo ? 'Remplacer' : 'Choisir un logo'}
+          </button>
+          {hasLogo && (
+            <button type="button" className={styles.dangerBtn} onClick={handleDelete}>Supprimer</button>
+          )}
+          <p className={styles.logoHint}>PNG, JPEG ou WebP. La hauteur s'adapte automatiquement au header.</p>
+          {msg && <p className={msg.includes('Erreur') ? styles.error : styles.success}>{msg}</p>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function SettingsTab() {
   const [settings, setSettings] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -705,6 +768,8 @@ function SettingsTab() {
       <div className={styles.tabBar}>
         <h2 className={styles.tabTitle}>Paramètres</h2>
       </div>
+
+      <LogoSection />
 
       <form className={styles.settingsForm} onSubmit={save}>
         <SettingField label="Rétention des vidéos" hint="Durée de conservation des vidéos après ingestion."
