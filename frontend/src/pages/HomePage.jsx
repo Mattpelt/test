@@ -137,7 +137,10 @@ function MyVideosTab({ onPreview, layoutMode }) {
     const a = document.createElement('a')
     a.href = `/api/videos/${videoId}/download?token=${encodeURIComponent(token)}`
     a.download = fileName
+    a.style.display = 'none'
+    document.body.appendChild(a)
     a.click()
+    document.body.removeChild(a)
     // Réactiver le bouton après 3s (pas d'événement "download complete" fiable)
     setTimeout(() => {
       setDownloadingIds(prev => {
