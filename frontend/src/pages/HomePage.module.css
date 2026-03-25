@@ -225,6 +225,7 @@
   cursor: pointer;
   border: none;
   padding: 0;
+  z-index: 1;
 }
 
 .clearDateBtn {
