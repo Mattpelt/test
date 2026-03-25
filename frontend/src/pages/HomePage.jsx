@@ -127,6 +127,7 @@ function MyVideosTab({ onPreview, layoutMode }) {
   const [error, setError] = useState('')
   const [view, setView] = useState('rot') // 'rot' | 'list'
   const [search, setSearch] = useState('')
+  const [dateFilter, setDateFilter] = useState('')
   const [downloadingIds, setDownloadingIds] = useState(new Set())
 
   async function load() {
@@ -177,13 +178,16 @@ function MyVideosTab({ onPreview, layoutMode }) {
     return `${(bytes / 1e6).toFixed(0)} Mo`
   }
 
-  // Filtrage multi-termes sur les participants
+  // Filtrage multi-termes + date
   const terms = search.trim().toLowerCase().split(/\s+/).filter(Boolean)
-  const filteredRots = terms.length === 0 ? rots : rots.filter(rot =>
-    terms.every(term =>
+  const filteredRots = rots.filter(rot => {
+    const matchesText = terms.length === 0 || terms.every(term =>
       rot.participants.some(p => p.afifly_name?.toLowerCase().includes(term))
     )
-  )
+    const matchesDate = !dateFilter || rot.rot_date === dateFilter
+    return matchesText && matchesDate
+  })
+  const hasFilter = terms.length > 0 || !!dateFilter
 
   if (loading) return <p className={styles.info}>Chargement…</p>
   if (error)   return <p className={styles.errorMsg}>{error}</p>
@@ -207,7 +211,19 @@ function MyVideosTab({ onPreview, layoutMode }) {
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
-        {terms.length > 0 && (
+        <div className={styles.dateFilterWrap}>
+          <input
+            className={styles.dateInput}
+            type="date"
+            value={dateFilter}
+            onChange={e => setDateFilter(e.target.value)}
+            title="Filtrer par date"
+          />
+          {dateFilter && (
+            <button className={styles.clearDateBtn} onClick={() => setDateFilter('')} title="Effacer la date">✕</button>
+          )}
+        </div>
+        {hasFilter && (
           <span className={styles.searchCount}>
             {filteredRots.length} rotation{filteredRots.length !== 1 ? 's' : ''}
           </span>
@@ -239,7 +255,7 @@ function MyVideosTab({ onPreview, layoutMode }) {
         />
       )}
 
-      {filteredRots.length === 0 && terms.length > 0 && (
+      {filteredRots.length === 0 && hasFilter && (
         <p className={styles.searchEmpty}>Aucune rotation ne correspond à votre recherche.</p>
       )}
 
@@ -313,6 +329,7 @@ function MyVideosTab({ onPreview, layoutMode }) {
                     onPreview={onPreview}
                     onDownload={handleDownload}
                     downloadingIds={downloadingIds}
+                    onUploaded={load}
                   />
                 )}
               </Fragment>
@@ -395,7 +412,7 @@ function VideoCard({ video, onPreview, onDownload, downloading }) {
 /* ─────────────────────────────────────────────────
    Carte rotation mobile (carousel)
 ───────────────────────────────────────────────── */
-function RotCardMobile({ rot, rotVideos, groupMembers, currentUserId, onPreview, onDownload, downloadingIds }) {
+function RotCardMobile({ rot, rotVideos, groupMembers, currentUserId, onPreview, onDownload, downloadingIds, onUploaded }) {
   const token = localStorage.getItem('token')
   const scrollRef = useRef(null)
   const [activeIdx, setActiveIdx] = useState(0)
@@ -536,6 +553,7 @@ function RotCardMobile({ rot, rotVideos, groupMembers, currentUserId, onPreview,
             >
               {downloadingIds.has(currentVideo?.id) ? 'Préparation…' : 'Télécharger'}
             </button>
+            <RotDropZone rotId={rot.id} onUploaded={onUploaded} />
           </div>
         </>
       )}

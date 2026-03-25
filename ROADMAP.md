@@ -41,8 +41,8 @@
 
 | Priorité | Feature | Description | Complexité |
 |----------|---------|-------------|------------|
-| P1 | **Recherche par date dans "Mes vidéos"** | Ajouter un filtre/champ date dans la barre de recherche de la vue Mes vidéos | `S` |
-| P1 | **Import manuel vidéos Insta360 (mobile)** | Permettre à un utilisateur d'importer ses vidéos depuis l'app mobile (Insta360 ne se branche pas toujours en USB Mass Storage) | `M` |
+| ✅ | **Recherche par date dans "Mes vidéos"** | Ajouter un filtre/champ date dans la barre de recherche de la vue Mes vidéos | `S` |
+| ✅ | **Import manuel vidéos Insta360 (mobile)** | Permettre à un utilisateur d'importer ses vidéos depuis l'app mobile (vue mobile — RotDropZone dans chaque card rotation) | `M` |
 
 ---
 
