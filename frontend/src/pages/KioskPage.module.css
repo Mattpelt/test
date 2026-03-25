@@ -419,7 +419,7 @@
 
 @keyframes emptyPulse {
   0%, 100% { opacity: 0.2; color: #666; }
-  50%       { opacity: 1;   color: #4DCF02; }
+  50%       { opacity: 1;   color: #023AAB; }
 }
 
 .emptyTitle {
