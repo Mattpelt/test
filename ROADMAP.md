@@ -35,6 +35,7 @@
 
 | ✅ | **Détection auto de la vue desktop/mobile** | Détecter le matériel sur lequel le site est ouvert (mobile ou desktop) et charge automatiquement le mode correspondant. Je ne veux plus de selecteur en haut a droite pour basculer d'un mode a l'autre. Si tu ouvre la page sur mobile => tu as la vue mobile. Idem pour le desktop.| `S` |
 | ✅ | **Repositionnement du bouton d'import manuel en mode mobile** | Le bouton d'import manuel est actuellement sous le bouton de téléchargement. Il faudrai le placer en haut a droite du header de la card de la même facon qu'en vue desktop. Pour ca on peut déplacer l'indicateur " x vids" sur la gauche qui est deja dans le header à droite. On obtiendrai sur la première ligne du header : Rot n°X - saut n°Y *(tilté a gauche) puis le reste tilté à droite* Z vidéos  (bouton d'upload) | `S` |
+| ✅ | **Bouton téléchargement ne fonctionne plus en mode mobile** | Le bouton téléchargement ne declanche plus le téléchargement uniquement en vue mobile. L'information "préparation" s'affiche bien, mais ensuite il n'y a pas de téléchargment qui se lance. | `S` |
 
 ---
 
@@ -44,8 +45,8 @@
 |----------|---------|-------------|------------|
 | ✅ | **Recherche par date dans "Mes vidéos"** | Ajouter un filtre/champ date dans la barre de recherche de la vue Mes vidéos | `S` |
 | ✅ | **Import manuel vidéos Insta360 (mobile)** | Permettre à un utilisateur d'importer ses vidéos depuis l'app mobile (vue mobile — RotDropZone dans chaque card rotation) | `M` |
-| P1 | **Selection de la destination de stockage des videos** | Permettre a l'admin d'administrer le stockage des vidéos pendant le setup principalement mais aussi pour la maintenance d'une instance | `M` |
-| P1 | **Responsivess de la vue mobile** | L'apercu vidéo a déja été corrigé une premiere fois mais s'affiche maintenant en bas à droite de l'écran, seulement 1 quart de la vidéo est visible sans redimenssioner la vue. Le menu déborde et sort de l'écran. Je pense qu'il y a un problème conceptuel sur la vue mobile, on ne devrai meme pas pouvoir zoomer et dezoomer la vue. Ca resemble plus a une page faite pour desktop adaptée en vue portait, mais c'est buggé. J'ai besoin que tu mène un audit de cette vue mobile et que tu propose des amélioration.| `M` |
+| P1.1 | **Selection de la destination de stockage des videos** | Permettre a l'admin d'administrer le stockage des vidéos pendant le setup principalement mais aussi pour la maintenance d'une instance | `M` |
+| P1.2 | **Responsivess de la vue mobile** | L'apercu vidéo a déja été corrigé une premiere fois mais s'affiche maintenant en bas à droite de l'écran, seulement 1 quart de la vidéo est visible sans redimenssioner la vue. Le menu déborde et sort de l'écran. Je pense qu'il y a un problème conceptuel sur la vue mobile, on ne devrai meme pas pouvoir zoomer et dezoomer la vue. Ca resemble plus a une page faite pour desktop adaptée en vue portait, mais c'est buggé. J'ai besoin que tu mène un audit de cette vue mobile et que tu propose des amélioration.| `M` |
 
 ---
 
@@ -54,7 +55,7 @@
 | Feature | Description | Complexité |
 |---------|-------------|------------|
 | **Application mobile** | App dédiée iOS/Android pour consulter ses vidéos, recevoir les notifications, gérer son compte | `XL` |
-| **Animations parachutisme** | Animations thématiques (chute libre, ouverture, atterrissage) pendant les temps d'attente kiosque et chargements | `M` |
+| **Animations parachutisme** | Animations thématiques (chute libre, ouverture, atterrissage) pendant les temps d'attente kiosque et chargements. On pourrai notament ajouter sur le kiosk une animation de moutons qui broute dans le champ lorsque aucune n'est connécté. L'annimation serai simple en vue de profil et noir et blanc. Placé en partie basse de la page. Prennant environ 20% de la hauteur totale de la page, entre l'affichage "brancher une caméra USB" et le bouton connexion. N'hesite pas a me proposer des choses. Genere les annimations avant de les implementer, car je vais surement vouloir les adapter avant implémentation.| `M` |
 
 ---
 
