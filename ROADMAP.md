@@ -32,8 +32,8 @@
 
 | Priorité | Feature | Description | Complexité |
 |----------|---------|-------------|------------|
-| P0 | **Aperçu vidéo mobile — débordement** | L'aperçu déborde sur le bord droit en vue mobile, oblige à dézoomer | `S` |
-| P0 | **Détection auto portrait / paysage** | Détecter l'orientation de la vidéo et adapter automatiquement l'affichage | `S` |
+| ✅ | **Aperçu vidéo mobile — débordement** | L'aperçu déborde sur le bord droit en vue mobile, oblige à dézoomer | `S` |
+| ✅ | **Détection auto portrait / paysage** | Détecter l'orientation de la vidéo et adapter automatiquement l'affichage | `S` |
 
 ---
 

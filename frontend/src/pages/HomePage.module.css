@@ -850,11 +850,14 @@
   background: var(--color-bg);
   border-radius: 12px;
   border: 1px solid var(--color-border);
-  width: 100%;
-  max-width: 960px;
+  width: min(960px, calc(100vw - 2rem));
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.playerModalPortrait {
+  width: min(420px, calc(100vw - 2rem));
 }
 
 .playerHeader {
@@ -894,6 +897,13 @@
   max-height: 75vh;
   background: #000;
   display: block;
+}
+
+.playerVideoPortrait {
+  width: auto;
+  height: 75vh;
+  max-width: 100%;
+  margin: 0 auto;
 }
 
 /* ── Groups list in rot table ── */

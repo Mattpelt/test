@@ -768,6 +768,7 @@ function SettingField({ label, hint, value, unit, onChange }) {
 function VideoPlayerModal({ video, onClose }) {
   const token = localStorage.getItem('token')
   const videoRef = useRef(null)
+  const [isPortrait, setIsPortrait] = useState(false)
 
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape') onClose() }
@@ -775,20 +776,26 @@ function VideoPlayerModal({ video, onClose }) {
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
 
+  function handleLoadedMetadata(e) {
+    const v = e.currentTarget
+    setIsPortrait(v.videoWidth > 0 && v.videoHeight > v.videoWidth)
+  }
+
   return (
     <div className={styles.playerOverlay} onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className={styles.playerModal}>
+      <div className={`${styles.playerModal} ${isPortrait ? styles.playerModalPortrait : ''}`}>
         <div className={styles.playerHeader}>
           <span className={styles.playerTitle}>{video.file_name}</span>
           <button className={styles.playerClose} onClick={onClose} aria-label="Fermer le lecteur">✕</button>
         </div>
         <video
           ref={videoRef}
-          className={styles.playerVideo}
+          className={`${styles.playerVideo} ${isPortrait ? styles.playerVideoPortrait : ''}`}
           src={`/api/videos/${video.id}/stream?token=${encodeURIComponent(token)}`}
           controls
           autoPlay
           playsInline
+          onLoadedMetadata={handleLoadedMetadata}
         />
       </div>
     </div>
