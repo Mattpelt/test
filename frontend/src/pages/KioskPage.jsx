@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import styles from './KioskPage.module.css'
+import sheepGif from '../assets/animation_transparent.gif'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -404,6 +405,7 @@ export default function KioskPage() {
             <div className={styles.emptyIcon}>⬡</div>
             <p className={styles.emptyTitle}>Aucune caméra connectée</p>
             <p className={styles.emptySub}>Branchez une caméra USB pour démarrer l'ingestion automatique</p>
+            <img src={sheepGif} alt="" className={styles.sheepAnimation} />
           </div>
         ) : (
           <div className={styles.grid}>

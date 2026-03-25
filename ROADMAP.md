@@ -1,66 +1,52 @@
 # SkyDive Media Hub — Roadmap
 
-> Légende : ✅ Livré · 🔄 En cours · 🐛 Bug · 📋 Planifié · 💡 Idée
-> Complexité : `S` < 1h · `M` demi-journée · `L` journée · `XL` plusieurs sessions
+> Légende : `feat` nouvelle fonctionnalité · `fix` correction de bug · Complexité : `S` <1h · `M` demi-journée · `L` journée · `XL` plusieurs sessions
 
 ---
 
-## ✅ Livré
+## ✅ Historique
 
-| # | Feature | Notes |
-|---|---------|-------|
-| PO-1 | Infrastructure Docker (db, backend, frontend, n8n) | 4 services, privileged backend |
-| PO-2 | Parser PDF Afifly | Rotations + groupes, validé sur rot 1614 & 1631 |
-| PO-3 | API complète | Auth JWT, CRUD users, vidéos, settings, stats |
-| PO-4 | Ingestion GoPro HERO via Open GoPro HTTP API | USB NCM, interface réseau |
-| PO-5 | Ingestion Insta360 X5 via USB Mass Storage | udisks2, serial extrait des .insv |
-| PO-6 | Architecture udev (4 scripts hôte) | connect MTP/block + disconnect net/block |
-| PO-7 | Mode kiosque `/kiosk` | Cards temps réel, SVG caméras, polling 1s |
-| PO-8 | Card disparaît au débranchement | Événement udev remove → 10s grace |
-| PO-9 | Matching vidéo ↔ rotation | Score delta temporal, fenêtre ±2h |
-| PO-10 | Workflow n8n IMAP → PDF Afifly | Gmail → parse → rotations |
-| PO-11 | Rétention automatique | APScheduler 03h00, expires_at à l'ingestion |
-| PO-12 | Notifications email | SMTP STARTTLS, après ingestion vidéos matchées |
-| PO-13 | Frontend complet | Login, kiosk, HomePage (vidéos/compte), admin |
-| PO-14 | Onboarding kiosque | Caméra inconnue → "Qui est-ce ?" → nouveau compte ou compte existant |
-| PO-15 | Statuts kiosque granulaires | Identification → Connexion → Analyse → Matching → Transfert |
-| PO-16 | Contraste WCAG AA | Boost couleurs dark/light pour écrans bas de gamme |
-
----
-
-## 🐛 Bugs & Corrections rapides
-
-| Priorité | Feature | Description | Complexité |
-|----------|---------|-------------|------------|
-
-| ✅ | **Détection auto de la vue desktop/mobile** | Détecter le matériel sur lequel le site est ouvert (mobile ou desktop) et charge automatiquement le mode correspondant. Je ne veux plus de selecteur en haut a droite pour basculer d'un mode a l'autre. Si tu ouvre la page sur mobile => tu as la vue mobile. Idem pour le desktop.| `S` |
-| ✅ | **Repositionnement du bouton d'import manuel en mode mobile** | Le bouton d'import manuel est actuellement sous le bouton de téléchargement. Il faudrai le placer en haut a droite du header de la card de la même facon qu'en vue desktop. Pour ca on peut déplacer l'indicateur " x vids" sur la gauche qui est deja dans le header à droite. On obtiendrai sur la première ligne du header : Rot n°X - saut n°Y *(tilté a gauche) puis le reste tilté à droite* Z vidéos  (bouton d'upload) | `S` |
-| ✅ | **Bouton téléchargement ne fonctionne plus en mode mobile** | Le bouton téléchargement ne declanche plus le téléchargement uniquement en vue mobile. L'information "préparation" s'affiche bien, mais ensuite il n'y a pas de téléchargment qui se lance. | `S` |
+| # | Type | Feature | Notes | Complexité |
+|---|------|---------|-------|------------|
+| PO-1 | feat | Infrastructure Docker | 4 services, privileged backend | L |
+| PO-2 | feat | Parser PDF Afifly | Rotations + groupes, validé sur rot 1614 & 1631 | M |
+| PO-3 | feat | API complète | Auth JWT, CRUD users, vidéos, settings, stats | XL |
+| PO-4 | feat | Ingestion GoPro HERO via Open GoPro HTTP API | USB NCM, interface réseau | L |
+| PO-5 | feat | Ingestion Insta360 X5 via USB Mass Storage | udisks2, serial extrait des .insv | L |
+| PO-6 | feat | Architecture udev (4 scripts hôte) | connect MTP/block + disconnect net/block | M |
+| PO-7 | feat | Mode kiosque `/kiosk` | Cards temps réel, SVG caméras, polling 1s | L |
+| PO-8 | feat | Card disparaît au débranchement | Événement udev remove → 10s grace | S |
+| PO-9 | feat | Matching vidéo ↔ rotation | Score delta temporal, fenêtre ±2h | M |
+| PO-10 | feat | Workflow n8n IMAP → PDF Afifly | Gmail → parse → rotations | M |
+| PO-11 | feat | Rétention automatique | APScheduler 03h00, expires_at à l'ingestion | S |
+| PO-12 | feat | Notifications email | SMTP STARTTLS, après ingestion vidéos matchées | M |
+| PO-13 | feat | Frontend complet | Login, kiosk, HomePage (vidéos/compte), admin | XL |
+| PO-14 | feat | Onboarding kiosque | Caméra inconnue → "Qui est-ce ?" → nouveau compte ou existant | M |
+| PO-15 | feat | Statuts kiosque granulaires | Identification → Connexion → Analyse → Matching → Transfert | S |
+| PO-16 | feat | Contraste WCAG AA mode sombre | Boost couleurs dark pour écrans bas de gamme | S |
+| FEAT-1 | feat | Recherche par date dans "Mes vidéos" | Filtre mois/année via icône calendrier | S |
+| FEAT-2 | feat | Import manuel vidéos Insta360 (mobile) | RotDropZone compact dans header card mobile | M |
+| FEAT-3 | feat | Filtre par nom de sautant dans "Mes vidéos" | Recherche texte dans la barre de filtre | S |
+| FEAT-4 | feat | Vue liste dans "Mes vidéos" | Toggle Par rotation / Liste | S |
+| FIX-1 | fix | Détection auto vue desktop/mobile | `matchMedia` réactif, suppression du toggle manuel | S |
+| FIX-2 | fix | Repositionnement bouton import en vue mobile | Upload dans header card à droite, compteur déplacé à gauche | S |
+| FIX-3 | fix | Contraste mode clair illisible | Fond `#c8d3dc`, bordures `#64748b`, textes near-black | S |
+| FIX-4 | fix | Bouton téléchargement inopérant en vue mobile | `document.body.appendChild(a)` avant `.click()` — fix mobile browsers | S |
+| FIX-5 | fix | Responsivité vue mobile | Zoom bloqué, overflow corrigé, menu, player en bottom-sheet 95dvh | M |
 
 ---
 
-## 📋 Features — Court terme
+## 📋 Backlog
 
-| Priorité | Feature | Description | Complexité |
-|----------|---------|-------------|------------|
-| ✅ | **Recherche par date dans "Mes vidéos"** | Ajouter un filtre/champ date dans la barre de recherche de la vue Mes vidéos | `S` |
-| ✅ | **Import manuel vidéos Insta360 (mobile)** | Permettre à un utilisateur d'importer ses vidéos depuis l'app mobile (vue mobile — RotDropZone dans chaque card rotation) | `M` |
-| P1.1 | **Selection de la destination de stockage des videos** | Permettre a l'admin d'administrer le stockage des vidéos pendant le setup principalement mais aussi pour la maintenance d'une instance | `M` |
-| P1.2 | **Responsivess de la vue mobile** | L'apercu vidéo a déja été corrigé une premiere fois mais s'affiche maintenant en bas à droite de l'écran, seulement 1 quart de la vidéo est visible sans redimenssioner la vue. Le menu déborde et sort de l'écran. Je pense qu'il y a un problème conceptuel sur la vue mobile, on ne devrai meme pas pouvoir zoomer et dezoomer la vue. Ca resemble plus a une page faite pour desktop adaptée en vue portait, mais c'est buggé. J'ai besoin que tu mène un audit de cette vue mobile et que tu propose des amélioration.| `M` |
-
----
-
-## 💡 Vision — Long terme
-
-| Feature | Description | Complexité |
-|---------|-------------|------------|
-| **Application mobile** | App dédiée iOS/Android pour consulter ses vidéos, recevoir les notifications, gérer son compte | `XL` |
-| **Animations parachutisme** | Animations thématiques (chute libre, ouverture, atterrissage) pendant les temps d'attente kiosque et chargements. On pourrai notament ajouter sur le kiosk une animation de moutons qui broute dans le champ lorsque aucune n'est connécté. L'annimation serai simple en vue de profil et noir et blanc. Placé en partie basse de la page. Prennant environ 20% de la hauteur totale de la page, entre l'affichage "brancher une caméra USB" et le bouton connexion. N'hesite pas a me proposer des choses. Genere les annimations avant de les implementer, car je vais surement vouloir les adapter avant implémentation.| `M` |
+| # | Priorité | Type | Feature | Description | Complexité |
+|---|----------|------|---------|-------------|------------|
+| P1.1 | haute | feat | Sélection destination stockage vidéos | Permettre à l'admin de gérer le répertoire de stockage (setup + maintenance) | M |
+| VISION-1 | basse | feat | Application mobile | App dédiée iOS/Android — consultation vidéos, notifications, gestion compte | XL |
+| VISION-2 | basse | feat | Animations parachutisme | Animation kiosque idle (moutons qui broutent, chute libre…) — générer avant impl. | M |
 
 ---
 
 ## Notes
 
-- Les items P0 bloquent l'expérience utilisateur → à traiter en priorité
-- Les items P1 sont des quick wins à fort impact
+- Numérotation : `PO-*` livraison initiale · `FEAT-*` nouvelle fonctionnalité · `FIX-*` correction · `VISION-*` long terme
 - Ce fichier est vivant — ajouter les nouvelles idées au fur et à mesure dans la bonne section

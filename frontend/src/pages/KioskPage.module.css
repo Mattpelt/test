@@ -436,6 +436,12 @@
   margin: 0;
 }
 
+.sheepAnimation {
+  margin-top: 2rem;
+  width: min(420px, 80vw);
+  opacity: 0.85;
+}
+
 /* ── Footer ───────────────────────────────────────────────────────────────── */
 
 .footer {
