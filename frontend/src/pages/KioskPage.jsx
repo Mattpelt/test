@@ -12,14 +12,17 @@ function formatSpeed(bps) {
 }
 
 const STATUS_LABEL = {
-  CONNECTING:  'Connexion…',
-  DETECTING:   'Identification…',
-  DOWNLOADING: 'Téléchargement',
-  COPYING:     'Copie',
-  PROCESSING:  'Traitement…',
-  DONE:        'Terminé',
-  ERROR:       'Erreur',
-  UNKNOWN:     'Caméra inconnue',
+  CONNECTING:   'Connexion…',
+  IDENTIFYING:  'Identification',
+  PROBING:      'Connexion',
+  SCANNING:     'Analyse des vidéos',
+  MATCHING:     'Matching',
+  DOWNLOADING:  'Téléchargement',
+  COPYING:      'Copie',
+  PROCESSING:   'Traitement…',
+  DONE:         'Terminé',
+  ERROR:        'Erreur',
+  UNKNOWN:      'Caméra inconnue',
 }
 
 // ─── Illustrations caméra ────────────────────────────────────────────────────
@@ -233,7 +236,7 @@ function CameraCard({ cam }) {
   const hasBytes  = cam.bytes_total > 0
   const pct       = hasBytes ? Math.min(100, Math.round((cam.bytes_done / cam.bytes_total) * 100)) : 0
   const isActive  = cam.status === 'DOWNLOADING' || cam.status === 'COPYING'
-  const isWaiting = cam.status === 'CONNECTING' || cam.status === 'DETECTING' || cam.status === 'PROCESSING'
+  const isWaiting = ['CONNECTING', 'IDENTIFYING', 'PROBING', 'SCANNING', 'MATCHING', 'PROCESSING'].includes(cam.status)
   const isDone    = cam.status === 'DONE'
   const isError   = cam.status === 'ERROR'
   const isUnknown = cam.status === 'UNKNOWN'

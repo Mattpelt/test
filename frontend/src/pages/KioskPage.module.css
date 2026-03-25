@@ -163,8 +163,11 @@
 }
 
 .pillCONNECTING,
-.pillDETECTING,
-.pillPROCESSING { background: #222; color: #888; }
+.pillPROCESSING  { background: #222;    color: #888; }
+.pillIDENTIFYING { background: #1a2030; color: #7090c0; }
+.pillPROBING     { background: #1a2030; color: #60a0d0; }
+.pillSCANNING    { background: #1e1a2e; color: #9070c0; }
+.pillMATCHING    { background: #1e1e0a; color: #a0a030; }
 
 .pillDOWNLOADING,
 .pillCOPYING    { background: #1e3a8a; color: #93c5fd; }

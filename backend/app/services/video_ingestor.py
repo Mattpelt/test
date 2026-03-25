@@ -236,7 +236,7 @@ def ingest_device(device_node: str, serial: str, db: Session) -> None:
     # serial USB brut (clé de la session kiosque enregistrée dans usb_watcher)
     usb_serial = serial
 
-    camera_state.update(usb_serial, status="DETECTING", status_detail="Identification du propriétaire…")
+    camera_state.update(usb_serial, status="IDENTIFYING", status_detail=None)
     retention_days, storage_path = _get_settings(db)
 
     # Montage
@@ -291,7 +291,7 @@ def ingest_device(device_node: str, serial: str, db: Session) -> None:
             return
 
         camera_state.update(usb_serial, owner_name=f"{user.first_name} {user.last_name}",
-                             status_detail="Scan des vidéos sur la carte…")
+                             status="SCANNING", status_detail="Scan des vidéos sur la carte…")
 
         # Enregistrer / mettre à jour les métadonnées de la caméra
         make = insv_make
@@ -305,6 +305,7 @@ def ingest_device(device_node: str, serial: str, db: Session) -> None:
         logger.info(f"[INGEST][Block] {len(video_files)} vidéo(s) trouvée(s) sur le périphérique")
 
         camera_state.update(usb_serial, video_total=len(video_files),
+                             status="MATCHING",
                              status_detail=f"{len(video_files)} vidéo(s) trouvée(s) — recherche de rotation…")
 
         # Matching avant téléchargement : [(filename, cre_ts), ...]
@@ -395,7 +396,7 @@ def ingest_gopro_http(serial: str, db: Session) -> None:
     Ingestion GoPro via Open GoPro HTTP API (interface USB NCM).
     Télécharge tous les fichiers vidéo présents sur la caméra.
     """
-    camera_state.update(serial, status="DETECTING", status_detail="Identification du propriétaire…")
+    camera_state.update(serial, status="IDENTIFYING", status_detail=None)
 
     user = _find_user(serial, db)
     if not user:
@@ -403,7 +404,7 @@ def ingest_gopro_http(serial: str, db: Session) -> None:
         return
 
     camera_state.update(serial, owner_name=f"{user.first_name} {user.last_name}",
-                         status_detail="Connexion à la caméra…")
+                         status="PROBING", status_detail="Connexion à la caméra…")
 
     logger.info(f"[INGEST][GoPro] ━━━ Début ingestion — {user.first_name} {user.last_name} | serial: {serial} ━━━")
     retention_days, storage_path = _get_settings(db)
@@ -439,7 +440,7 @@ def ingest_gopro_http(serial: str, db: Session) -> None:
         _upsert_camera(db, serial, make="GoPro", vendor_id="2672")
         camera_state.update(serial, make="GoPro")
 
-    camera_state.update(serial, status_detail="Récupération de la liste des médias…")
+    camera_state.update(serial, status="SCANNING", status_detail="Récupération de la liste des médias…")
 
     # La GoPro peut retourner une liste vide si le serveur média n'est pas encore prêt
     # → on retente jusqu'à 5 fois avec 5s d'intervalle
@@ -483,6 +484,7 @@ def ingest_gopro_http(serial: str, db: Session) -> None:
 
     logger.info(f"[INGEST][GoPro] {len(all_files)} vidéo(s) présente(s) sur la carte SD")
     camera_state.update(serial, video_total=len(all_files),
+                         status="MATCHING",
                          status_detail=f"{len(all_files)} vidéo(s) sur la carte — recherche de rotation…")
 
     # Matching avant téléchargement
@@ -582,7 +584,7 @@ def ingest_mtp_device(serial: str, db: Session) -> None:
     Ingestion via MTP/PTP (gphoto2).
     Compatible avec GoPro, Insta360, Sony et la plupart des caméras modernes.
     """
-    camera_state.update(serial, status="DETECTING", status_detail="Identification du propriétaire…")
+    camera_state.update(serial, status="IDENTIFYING", status_detail=None)
 
     user = _find_user(serial, db)
     if not user:
@@ -590,7 +592,7 @@ def ingest_mtp_device(serial: str, db: Session) -> None:
         return
 
     camera_state.update(serial, owner_name=f"{user.first_name} {user.last_name}",
-                         status_detail="Connexion à la caméra…")
+                         status="PROBING", status_detail="Connexion à la caméra…")
 
     retention_days, storage_path = _get_settings(db)
 
@@ -618,10 +620,12 @@ def ingest_mtp_device(serial: str, db: Session) -> None:
             logger.warning(f"[INGEST][MTP] Impossible de lire les abilities caméra : {e}")
 
         logger.info(f"[INGEST][MTP] ━━━ Début ingestion — {user.first_name} {user.last_name} | serial: {serial} ━━━")
+        camera_state.update(serial, status="SCANNING", status_detail="Analyse des vidéos sur la caméra…")
         video_files = _list_mtp_videos(camera)
         logger.info(f"[INGEST][MTP] {len(video_files)} vidéo(s) trouvée(s) sur la caméra")
 
         camera_state.update(serial, video_total=len(video_files),
+                             status="MATCHING",
                              status_detail=f"{len(video_files)} vidéo(s) trouvée(s) — recherche de rotation…")
 
         # Récupérer les horodatages et tailles pour le matching (sans télécharger)
