@@ -35,26 +35,26 @@
 
 /* ── Design tokens — Mode clair ── */
 [data-theme="light"] {
-  --color-bg:           #f1f5f9;
+  --color-bg:           #c8d3dc;  /* fond gris moyen — les cartes blanches ressortent clairement */
   --color-surface:      #ffffff;
-  --color-border:       #e2e8f0;
+  --color-border:       #64748b;  /* bordures très visibles sur écrans bas de gamme */
   --color-text:         #0f172a;
   --color-text-2:       #1e293b;
-  --color-muted:        #3a4f63;  /* boosted: ~7.5:1 on bg */
-  --color-faint:        #4c5e72;  /* boosted: ~5.5:1 on bg — onglets inactifs */
-  --color-dim:          #5a6a7d;  /* boosted: ~4.1:1 on bg — texte très secondaire */
-  --color-accent:       #2563eb;
-  --color-accent-dark:  #1d4ed8;
+  --color-muted:        #1e293b;  /* ~13:1 on surface */
+  --color-faint:        #334155;  /* ~10:1 on surface */
+  --color-dim:          #475569;  /* ~7:1 on surface */
+  --color-accent:       #1d4ed8;
+  --color-accent-dark:  #1e40af;
   --color-accent-bg:    #dbeafe;
   --color-accent-text:  #1d4ed8;
-  --color-danger:       #dc2626;
-  --color-success:      #16a34a;
+  --color-danger:       #b91c1c;
+  --color-success:      #15803d;
 
   /* Badges statut */
   --color-badge-ok-bg:       #dcfce7;
-  --color-badge-ok-text:     #15803d;
+  --color-badge-ok-text:     #14532d;
   --color-badge-err-bg:      #fee2e2;
-  --color-badge-err-text:    #dc2626;
+  --color-badge-err-text:    #991b1b;
   --color-badge-admin-bg:    #dbeafe;
   --color-badge-admin-text:  #1d4ed8;
 
@@ -63,7 +63,7 @@
 
   /* Surfaces danger / success */
   --color-danger-surface:  #fee2e2;
-  --color-danger-border:   #fca5a5;
+  --color-danger-border:   #ef4444;
   --color-success-surface: #dcfce7;
   --color-success-border:  #16a34a;
 }
