@@ -142,7 +142,12 @@
   border-bottom: 1px solid var(--color-border);
   display: flex;
   padding: 0 1.5rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  flex-shrink: 0;
 }
+.tabs::-webkit-scrollbar { display: none; }
 
 .tab {
   background: none;
@@ -1269,7 +1274,7 @@
 .desktopOnly { display: block; }
 .mobileOnly  { display: none; }
 
-@media (max-width: 640px) {
+@media (max-width: 768px) {
   .desktopOnly { display: none !important; }
   .mobileOnly  { display: block; }
 }
@@ -1710,9 +1715,43 @@
   flex: 1;
 }
 
-/* ── videoContent gap sur mobile ── */
-@media (max-width: 640px) {
-  .videoContent {
-    gap: 0.75rem;
+/* ── Correctifs mobiles globaux ── */
+@media (max-width: 768px) {
+  /* videoContent */
+  .videoContent { gap: 0.75rem; }
+
+  /* Header : padding réduit, nom masqué */
+  .header { padding: 0 0.75rem; }
+  .headerRight { gap: 0.5rem; }
+  .userName { display: none; }
+
+  /* Tabs : scrollables horizontalement, sans padding excessif */
+  .tabs {
+    padding: 0 0.5rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    flex-shrink: 0;
   }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { padding: 0.75rem 0.6rem; font-size: 0.8rem; white-space: nowrap; }
+
+  /* Main : padding réduit */
+  .main { padding: 1rem 0.75rem; }
+
+  /* Player modal : plein écran sur mobile */
+  .playerOverlay {
+    padding: 0;
+    align-items: flex-end;
+    height: 100dvh;
+  }
+  .playerModal {
+    width: 100vw;
+    border-radius: 16px 16px 0 0;
+    max-height: 95dvh;
+    overflow-y: auto;
+  }
+  .playerModalPortrait { width: 100vw; }
+  .playerVideo { max-height: 60dvh; }
+  .playerVideoPortrait { height: 60dvh; }
 }
