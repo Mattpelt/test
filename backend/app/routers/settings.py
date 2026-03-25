@@ -1,4 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import os
+import shutil
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -6,6 +10,9 @@ from app.auth import require_admin
 from app.database import get_db
 from app.models.settings import Settings
 from app.models.user import User
+
+LOGO_PATH = "/mnt/videos/logo.png"
+LOGO_ALLOWED = {"image/png", "image/jpeg", "image/webp"}
 
 router = APIRouter(prefix="/settings", tags=["Configuration"])
 
@@ -64,3 +71,30 @@ def update_settings(payload: SettingsUpdate, db: Session = Depends(get_db), _: U
     db.commit()
     db.refresh(s)
     return s
+
+
+# ── Logo du centre ────────────────────────────────────────────────────────────
+
+@router.get("/logo")
+def get_logo():
+    """Sert le logo du centre (sans authentification)."""
+    if not os.path.exists(LOGO_PATH):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Aucun logo configuré.")
+    return FileResponse(LOGO_PATH, media_type="image/png")
+
+
+@router.post("/logo", status_code=status.HTTP_204_NO_CONTENT)
+async def upload_logo(file: UploadFile = File(...), _: User = Depends(require_admin)):
+    """Upload ou remplace le logo du centre (PNG/JPEG/WebP, admin uniquement)."""
+    if file.content_type not in LOGO_ALLOWED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Format non supporté. PNG, JPEG ou WebP uniquement.")
+    os.makedirs(os.path.dirname(LOGO_PATH), exist_ok=True)
+    with open(LOGO_PATH, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+
+@router.delete("/logo", status_code=status.HTTP_204_NO_CONTENT)
+def delete_logo(_: User = Depends(require_admin)):
+    """Supprime le logo du centre (admin uniquement)."""
+    if os.path.exists(LOGO_PATH):
+        os.remove(LOGO_PATH)

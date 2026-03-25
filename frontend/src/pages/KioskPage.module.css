@@ -19,6 +19,18 @@
   flex-shrink: 0;
 }
 
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.headerLogo {
+  height: 28px;
+  width: auto;
+  object-fit: contain;
+}
+
 .headerTitle {
   font-size: 0.85rem;
   font-weight: 600;

@@ -89,6 +89,18 @@
   height: 56px;
 }
 
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.headerLogo {
+  height: 32px;
+  width: auto;
+  object-fit: contain;
+}
+
 .headerTitle {
   font-size: 1rem;
   font-weight: 700;

@@ -390,7 +390,10 @@ export default function KioskPage() {
     <div className={styles.page}>
 
       <header className={styles.header}>
-        <span className={styles.headerTitle}>SkyDive Media Hub</span>
+        <div className={styles.headerLeft}>
+          <img src="/api/settings/logo" alt="" className={styles.headerLogo} onError={e => { e.target.style.display = 'none' }} />
+          <span className={styles.headerTitle}>SkyDive Media Hub</span>
+        </div>
         <span className={styles.headerRight}>
           {connError
             ? <span className={styles.connError}>Serveur inaccessible</span>
