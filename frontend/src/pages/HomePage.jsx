@@ -211,18 +211,23 @@ function MyVideosTab({ onPreview, layoutMode }) {
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
-        <div className={styles.dateFilterWrap}>
+        <label className={styles.dateIconLabel} title="Filtrer par mois">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.dateIconSvg}>
+            <rect x="3" y="4" width="18" height="18" rx="2"/>
+            <line x1="16" y1="2" x2="16" y2="6"/>
+            <line x1="8" y1="2" x2="8" y2="6"/>
+            <line x1="3" y1="10" x2="21" y2="10"/>
+          </svg>
           <input
-            className={styles.dateInput}
+            className={styles.dateInputHidden}
             type="month"
             value={dateFilter}
             onChange={e => setDateFilter(e.target.value)}
-            title="Filtrer par mois"
           />
-          {dateFilter && (
-            <button className={styles.clearDateBtn} onClick={() => setDateFilter('')} title="Effacer la date">✕</button>
-          )}
-        </div>
+        </label>
+        {dateFilter && (
+          <button className={styles.clearDateBtn} onClick={() => setDateFilter('')} title="Effacer la date">✕</button>
+        )}
         {hasFilter && (
           <span className={styles.searchCount}>
             {filteredRots.length} rotation{filteredRots.length !== 1 ? 's' : ''}
