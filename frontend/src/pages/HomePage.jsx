@@ -128,6 +128,7 @@ function MyVideosTab({ onPreview, layoutMode }) {
   const [view, setView] = useState('rot') // 'rot' | 'list'
   const [search, setSearch] = useState('')
   const [dateFilter, setDateFilter] = useState('')
+  const monthInputRef = useRef(null)
   const [downloadingIds, setDownloadingIds] = useState(new Set())
 
   async function load() {
@@ -211,7 +212,11 @@ function MyVideosTab({ onPreview, layoutMode }) {
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
-        <label className={styles.dateIconLabel} title="Filtrer par mois">
+        <label
+          className={styles.dateIconLabel}
+          title="Filtrer par mois"
+          onClick={e => { e.preventDefault(); monthInputRef.current?.showPicker() }}
+        >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.dateIconSvg}>
             <rect x="3" y="4" width="18" height="18" rx="2"/>
             <line x1="16" y1="2" x2="16" y2="6"/>
@@ -219,6 +224,7 @@ function MyVideosTab({ onPreview, layoutMode }) {
             <line x1="3" y1="10" x2="21" y2="10"/>
           </svg>
           <input
+            ref={monthInputRef}
             className={styles.dateInputHidden}
             type="month"
             value={dateFilter}
