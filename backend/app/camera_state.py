@@ -21,6 +21,7 @@ def register(serial: str) -> None:
         _sessions[serial] = {
             "serial":         serial,
             "status":         "CONNECTING",
+            "status_detail":  None,
             "make":           None,
             "model":          None,
             "owner_name":     None,

@@ -259,9 +259,14 @@ function CameraCard({ cam }) {
       {/* En-tête : modèle caméra + pastille statut */}
       <div className={styles.cardTop}>
         <span className={styles.cameraLabel}>{cameraLabel}</span>
-        <span className={`${styles.statusPill} ${styles[`pill${cam.status}`]}`}>
-          {STATUS_LABEL[cam.status] ?? cam.status}
-        </span>
+        <div className={styles.statusBlock}>
+          <span className={`${styles.statusPill} ${styles[`pill${cam.status}`]}`}>
+            {STATUS_LABEL[cam.status] ?? cam.status}
+          </span>
+          {cam.status_detail && (
+            <span className={styles.statusDetail}>{cam.status_detail}</span>
+          )}
+        </div>
       </div>
 
       {/* Nom propriétaire — info principale, très lisible de loin */}
