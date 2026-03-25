@@ -414,13 +414,12 @@
 
 .emptyIcon {
   font-size: 4rem;
-  opacity: 0.15;
   animation: emptyPulse 3s ease-in-out infinite;
 }
 
 @keyframes emptyPulse {
-  0%, 100% { opacity: 0.1; }
-  50%       { opacity: 0.25; }
+  0%, 100% { opacity: 0.2; color: #666; }
+  50%       { opacity: 1;   color: #4DCF02; }
 }
 
 .emptyTitle {
@@ -437,9 +436,9 @@
 }
 
 .sheepAnimation {
-  margin-top: 2rem;
+  margin-top: 4rem;
   width: min(420px, 80vw);
-  opacity: 0.85;
+  opacity: 0.55;
 }
 
 /* ── Footer ───────────────────────────────────────────────────────────────── */
