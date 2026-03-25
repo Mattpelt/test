@@ -641,6 +641,28 @@
 }
 
 /* ── Drop zone upload manuel ── */
+.dropZoneCompact {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px dashed var(--color-border);
+  border-radius: 6px;
+  color: var(--color-faint);
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  user-select: none;
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  min-width: 1.8rem;
+  height: 1.6rem;
+}
+
+.dropZoneCompact:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
 .dropZone {
   display: flex;
   align-items: center;
@@ -1266,9 +1288,17 @@
 
 .rotCardTitleRow {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   margin-bottom: 0.15rem;
+  gap: 0.5rem;
+}
+
+.rotCardHeaderRight {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
 }
 
 .rotCardTitle {

@@ -14,21 +14,21 @@ export default function HomePage() {
     ...(user.is_admin ? ['Dashboard', 'Paramètres serveur', 'Utilisateurs', 'Rotations', 'Vidéos'] : []),
   ]
   const [tab, setTab] = useState('Mes vidéos')
-  const [layoutMode, setLayoutMode] = useState(() => {
-    const saved = localStorage.getItem('layoutMode')
-    if (saved === 'desktop' || saved === 'mobile') return saved
-    return window.innerWidth <= 640 ? 'mobile' : 'desktop'
-  })
+
+  // Détection auto mobile/desktop — réactive au resize
+  const [layoutMode, setLayoutMode] = useState(() =>
+    window.matchMedia('(max-width: 768px)').matches ? 'mobile' : 'desktop'
+  )
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 768px)')
+    const handler = e => setLayoutMode(e.matches ? 'mobile' : 'desktop')
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
 
   const [colorMode, setColorMode] = useState(() =>
     localStorage.getItem('colorMode') || 'dark'
   )
-
-  function toggleLayout() {
-    const next = layoutMode === 'desktop' ? 'mobile' : 'desktop'
-    setLayoutMode(next)
-    localStorage.setItem('layoutMode', next)
-  }
 
   function toggleColorMode() {
     const next = colorMode === 'dark' ? 'light' : 'dark'
@@ -65,24 +65,7 @@ export default function HomePage() {
               </svg>
             )}
           </button>
-          <button
-            className={styles.layoutToggleBtn}
-            onClick={toggleLayout}
-            title={layoutMode === 'desktop' ? 'Passer en vue mobile' : 'Passer en vue bureau'}
-          >
-            {layoutMode === 'desktop' ? (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="5" y="2" width="14" height="20" rx="2"/>
-                <line x1="12" y1="18" x2="12.01" y2="18"/>
-              </svg>
-            ) : (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="3" width="20" height="14" rx="2"/>
-                <path d="M8 21h8M12 17v4"/>
-              </svg>
-            )}
-          </button>
-          <span className={styles.userName}>{user.first_name} {user.last_name}</span>
+<span className={styles.userName}>{user.first_name} {user.last_name}</span>
           <button className={styles.logoutBtn} onClick={logout}>Déconnexion</button>
         </div>
       </header>
@@ -486,7 +469,10 @@ function RotCardMobile({ rot, rotVideos, groupMembers, currentUserId, onPreview,
             Rot n°{rot.rot_number}
             {rot.day_number ? ` — saut n°${rot.day_number}` : ''}
           </span>
-          <span className={styles.rotCardCount}>{videos.length} vid</span>
+          <div className={styles.rotCardHeaderRight}>
+            <span className={styles.rotCardCount}>{videos.length} vid{videos.length !== 1 ? 's' : ''}</span>
+            <RotDropZone rotId={rot.id} onUploaded={onUploaded} compact />
+          </div>
         </div>
         <div className={styles.rotCardDate}>
           {formatDate(rot.rot_date)}
@@ -564,7 +550,6 @@ function RotCardMobile({ rot, rotVideos, groupMembers, currentUserId, onPreview,
             >
               {downloadingIds.has(currentVideo?.id) ? 'Préparation…' : 'Télécharger'}
             </button>
-            <RotDropZone rotId={rot.id} onUploaded={onUploaded} />
           </div>
         </>
       )}
@@ -834,7 +819,7 @@ function VideoPlayerModal({ video, onClose }) {
 /* ─────────────────────────────────────────────────
    Zone de drop pour upload manuel dans une rotation
 ───────────────────────────────────────────────── */
-function RotDropZone({ rotId, onUploaded }) {
+function RotDropZone({ rotId, onUploaded, compact = false }) {
   const inputRef = useRef(null)
   const [dragOver, setDragOver] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -875,7 +860,7 @@ function RotDropZone({ rotId, onUploaded }) {
     if (file) upload(file)
   }
 
-  let zoneClass = styles.dropZone
+  let zoneClass = compact ? styles.dropZoneCompact : styles.dropZone
   if (dragOver)  zoneClass += ` ${styles.dropZoneOver}`
   if (done)      zoneClass += ` ${styles.dropZoneDone}`
   if (error)     zoneClass += ` ${styles.dropZoneError}`
@@ -913,7 +898,7 @@ function RotDropZone({ rotId, onUploaded }) {
             <polyline points="17 8 12 3 7 8"/>
             <line x1="12" y1="3" x2="12" y2="15"/>
           </svg>
-          <span className={styles.dropZoneLabel}>Ajouter</span>
+          {!compact && <span className={styles.dropZoneLabel}>Ajouter</span>}
         </>
       )}
     </div>

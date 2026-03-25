@@ -32,8 +32,9 @@
 
 | Priorité | Feature | Description | Complexité |
 |----------|---------|-------------|------------|
-| ✅ | **Aperçu vidéo mobile — débordement** | L'aperçu déborde sur le bord droit en vue mobile, oblige à dézoomer | `S` |
-| ✅ | **Détection auto portrait / paysage** | Détecter l'orientation de la vidéo et adapter automatiquement l'affichage | `S` |
+
+| ✅ | **Détection auto de la vue desktop/mobile** | Détecter le matériel sur lequel le site est ouvert (mobile ou desktop) et charge automatiquement le mode correspondant. Je ne veux plus de selecteur en haut a droite pour basculer d'un mode a l'autre. Si tu ouvre la page sur mobile => tu as la vue mobile. Idem pour le desktop.| `S` |
+| ✅ | **Repositionnement du bouton d'import manuel en mode mobile** | Le bouton d'import manuel est actuellement sous le bouton de téléchargement. Il faudrai le placer en haut a droite du header de la card de la même facon qu'en vue desktop. Pour ca on peut déplacer l'indicateur " x vids" sur la gauche qui est deja dans le header à droite. On obtiendrai sur la première ligne du header : Rot n°X - saut n°Y *(tilté a gauche) puis le reste tilté à droite* Z vidéos  (bouton d'upload) | `S` |
 
 ---
 
@@ -43,6 +44,8 @@
 |----------|---------|-------------|------------|
 | ✅ | **Recherche par date dans "Mes vidéos"** | Ajouter un filtre/champ date dans la barre de recherche de la vue Mes vidéos | `S` |
 | ✅ | **Import manuel vidéos Insta360 (mobile)** | Permettre à un utilisateur d'importer ses vidéos depuis l'app mobile (vue mobile — RotDropZone dans chaque card rotation) | `M` |
+| P1 | **Selection de la destination de stockage des videos** | Permettre a l'admin d'administrer le stockage des vidéos pendant le setup principalement mais aussi pour la maintenance d'une instance | `M` |
+| P1 | **Responsivess de la vue mobile** | L'apercu vidéo a déja été corrigé une premiere fois mais s'affiche maintenant en bas à droite de l'écran, seulement 1 quart de la vidéo est visible sans redimenssioner la vue. Le menu déborde et sort de l'écran. Je pense qu'il y a un problème conceptuel sur la vue mobile, on ne devrai meme pas pouvoir zoomer et dezoomer la vue. Ca resemble plus a une page faite pour desktop adaptée en vue portait, mais c'est buggé. J'ai besoin que tu mène un audit de cette vue mobile et que tu propose des amélioration.| `M` |
 
 ---
 
