@@ -33,6 +33,7 @@
 | FIX-3 | fix | Contraste mode clair illisible | Fond `#c8d3dc`, bordures `#64748b`, textes near-black | S |
 | FIX-4 | fix | Bouton téléchargement inopérant en vue mobile | `document.body.appendChild(a)` avant `.click()` — fix mobile browsers | S |
 | FIX-5 | fix | Responsivité vue mobile | Zoom bloqué, overflow corrigé, menu, player en bottom-sheet 95dvh | M |
+| FEAT-5 | feat | Logo du centre de parachutisme | Upload PNG/JPEG/WebP via admin, affiché après le titre dans header kiosk + app | M |
 
 ---
 
@@ -43,6 +44,12 @@
 | P1.1 | haute | feat | Sélection destination stockage vidéos | Permettre à l'admin de gérer le répertoire de stockage (setup + maintenance) | M |
 | VISION-1 | basse | feat | Application mobile | App dédiée iOS/Android — consultation vidéos, notifications, gestion compte | XL |
 | VISION-2 | basse | feat | Animations parachutisme | Animation kiosque idle (moutons qui broutent, chute libre…) — générer avant impl. | M |
+| VISION-3 | basse | feat | VPN pour accès admin distant | Implémenter un VPN Tailscale dans la stack docker pour permettre un accès administrateur à distance. Ajouter le login du container Tailscale dans le setup. | M |
+| VISION-4 | basse | feat | Déployer HTTPS | Implémenter HTTPS pour une navigation sécurisée | XL |
+| VISION-5 | basse | feat | Déployer HTTPS | Implémenter HTTPS pour une navigation sécurisée | S |
+| VISION-6 | basse | feat | Audit fonctionnel backend | Faire un audit des fonctionnalités et proposer des axe d'amélioration fonctionnels sur le backend | XL |
+| VISION-7 | basse | feat | Audit UX/UI frontend | Faire un audit graphique et design du frontend et proposer des axe d'amélioration | XL |
+| VISION-8 | basse | feat | Audit documentation | Faire un audit de toute la documentation du projet plus le projet en lui même afin de refaire entièrement la documentation | XL |
 
 ---
 
