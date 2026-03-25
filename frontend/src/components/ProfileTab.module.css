@@ -138,10 +138,10 @@
 .primaryBtn:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 
 .addBtn {
-  background: #1e40af;
+  background: var(--color-accent);
   border: none;
   border-radius: 8px;
-  color: #93c5fd;
+  color: #fff;
   cursor: pointer;
   font-size: 0.875rem;
   font-weight: 600;
@@ -151,7 +151,7 @@
   flex-shrink: 0;
 }
 
-.addBtn:hover:not(:disabled) { background: #1d4ed8; color: #bfdbfe; }
+.addBtn:hover:not(:disabled) { background: var(--color-accent-dark); }
 .addBtn:disabled { opacity: 0.4; cursor: not-allowed; }
 .addBtn:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 

@@ -63,7 +63,7 @@
 }
 
 .label {
-  color: #cbd5e1;
+  color: var(--color-muted);
   font-size: 0.875rem;
   font-weight: 500;
   display: flex;
@@ -124,7 +124,7 @@
 }
 
 .cameraLabel {
-  color: #cbd5e1;
+  color: var(--color-muted);
   font-size: 0.875rem;
   font-weight: 500;
 }
@@ -198,11 +198,11 @@
 .cameraCard:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 
 .cameraCardSelected {
-  background: #052e16;
-  border-color: #16a34a;
+  background: var(--color-success-surface);
+  border-color: var(--color-success-border);
 }
 
-.cameraCardSelected:hover { background: #052e16; border-color: #22c55e; }
+.cameraCardSelected:hover { background: var(--color-success-surface); border-color: var(--color-success); }
 
 .cameraCardIcon {
   color: var(--color-dim);
@@ -213,7 +213,7 @@
   transition: color 0.15s;
 }
 
-.cameraCardSelected .cameraCardIcon { color: #4ade80; }
+.cameraCardSelected .cameraCardIcon { color: var(--color-success); }
 
 .cameraCardBody { flex: 1; }
 
@@ -223,7 +223,7 @@
   font-weight: 600;
 }
 
-.cameraCardSelected .cameraCardModel { color: #86efac; }
+.cameraCardSelected .cameraCardModel { color: var(--color-success); }
 
 .cameraCardSerial {
   color: var(--color-faint);

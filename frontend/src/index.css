@@ -25,6 +25,12 @@
 
   /* Hover carte pending (profil) */
   --color-pending-hover: #0f1f38;
+
+  /* Surfaces danger / success */
+  --color-danger-surface:  #450a0a;
+  --color-danger-border:   #7f1d1d;
+  --color-success-surface: #052e16;
+  --color-success-border:  #16a34a;
 }
 
 /* ── Design tokens — Mode clair ── */
@@ -54,6 +60,12 @@
 
   /* Hover carte pending (profil) */
   --color-pending-hover: #eff6ff;
+
+  /* Surfaces danger / success */
+  --color-danger-surface:  #fee2e2;
+  --color-danger-border:   #fca5a5;
+  --color-success-surface: #dcfce7;
+  --color-success-border:  #16a34a;
 }
 
 *, *::before, *::after {
