@@ -184,7 +184,7 @@ function MyVideosTab({ onPreview, layoutMode }) {
     const matchesText = terms.length === 0 || terms.every(term =>
       rot.participants.some(p => p.afifly_name?.toLowerCase().includes(term))
     )
-    const matchesDate = !dateFilter || rot.rot_date === dateFilter
+    const matchesDate = !dateFilter || rot.rot_date?.startsWith(dateFilter)
     return matchesText && matchesDate
   })
   const hasFilter = terms.length > 0 || !!dateFilter
@@ -214,10 +214,10 @@ function MyVideosTab({ onPreview, layoutMode }) {
         <div className={styles.dateFilterWrap}>
           <input
             className={styles.dateInput}
-            type="date"
+            type="month"
             value={dateFilter}
             onChange={e => setDateFilter(e.target.value)}
-            title="Filtrer par date"
+            title="Filtrer par mois"
           />
           {dateFilter && (
             <button className={styles.clearDateBtn} onClick={() => setDateFilter('')} title="Effacer la date">✕</button>
