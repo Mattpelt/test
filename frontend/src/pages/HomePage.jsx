@@ -41,8 +41,8 @@ export default function HomePage() {
     <div className={styles.page}>
       <header className={styles.header}>
         <div className={styles.headerLeft}>
-          <img src="/api/settings/logo" alt="" className={styles.headerLogo} onError={e => { e.target.style.display = 'none' }} />
           <span className={styles.headerTitle}>SkyDive Media Hub</span>
+          <img src="/api/settings/logo" alt="" className={styles.headerLogo} onError={e => { e.target.style.display = 'none' }} />
         </div>
         <div className={styles.headerRight}>
           <button
